@@ -1,0 +1,11 @@
+
+# build directory
+build*
+
+# executable link
+main
+
+# macos specific
+.DS_Store*
+
+
