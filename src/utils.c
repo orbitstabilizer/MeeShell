@@ -1,4 +1,8 @@
 #include "utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+// #include "debug.h"
+
 
 char* search_command(const char *command){
     char* path = getenv("PATH");
@@ -32,3 +36,69 @@ char* search_command(const char *command){
     }
     return NULL;
 }
+
+
+
+
+void exec_command(char **argv, int background) {
+    char *path = search_command(argv[0]);
+    if (path != NULL) {
+        argv[0] = path;
+        // fork a child process
+        pid_t pid = fork();
+        if (pid == 0) {
+            // child process
+            execv(path, argv);
+            // if execv returns, it must have failed
+            printf("Command not found\n");
+            exit(1);
+        } else {
+            // parent process
+            if (!background)
+                wait(NULL);
+            else{
+                printf("Process %d running in background\n", pid);
+                }
+        }
+        free(path);
+    } else {
+        printf("Command not found\n");
+        
+    }
+}
+
+char **parse_commandline_args(char *buffer, size_t buffer_size) {
+    char copy[buffer_size];
+    strncpy(copy, buffer, buffer_size);
+    char *token = strtok(copy, " ");
+
+    // count number of arguments
+    int argc = 0;
+    while (token != NULL) {
+        token = strtok(NULL, " ");
+        argc++;
+    }
+
+    // allocate memory for arguments + 1 for null terminator + 1 for path
+    char **argv = calloc(argc + 2, sizeof(char *));
+    token = strtok(buffer, " ");
+    for (int i = 0; i < argc; i++) {
+        argv[i] = token;
+        token = strtok(NULL, " ");
+    }
+
+    return argv;
+}
+
+
+void get_user(struct user *user) {
+    struct passwd *pws;
+    uid_t uid = getuid();
+    pws = getpwuid(uid);
+
+    strncpy(user->username, pws->pw_name, BUFFER_SIZE);
+    gethostname(user->hostname, BUFFER_SIZE);
+    getcwd(user->cwd, BUFFER_SIZE);
+}
+
+

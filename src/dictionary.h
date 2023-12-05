@@ -1,6 +1,8 @@
 #ifndef DICTIONARY_H
 #define DICTIONARY_H
 #define HASHSIZE 31013
+#define KEY_LEN 1000
+#define VALUE_LEN 1000
 
 /*
  * Chain struct
@@ -8,22 +10,19 @@
  * name: name of variable
  * value: value of variable
  */
-typedef struct Chain Chain;
 typedef struct Chain { /* table entry: */
-    Chain *next; /* next entry in chain */
-    char *name; /* defined name */
-    long value;
+    struct Chain *next; /* next entry in chain */
+    char *key; /* defined name */
+    char *value;
 }Chain;
 
 /*
  * Dictionary struct
  * hashtab: array of pointers to chains
  */
-typedef struct Dictionary Dictionary;
-
-struct Dictionary{
+typedef struct Dictionary{
   Chain* hashtab[HASHSIZE];   
-};
+} Dictionary;
 
 /*
  * Create a new dictionary
@@ -36,14 +35,14 @@ Dictionary* new_dictionary();
  * name: name of variable
  * value: value of variable
  */
-void set_var(Dictionary *dict, char *name, long value);
+void set_var(Dictionary *dict, char *key, char *value);
 
 /*
  * Get a variable from the dictionary
  * dict: dictionary to get variable from
  * name: name of variable
  */
-long get_var(Dictionary *dict, char *name);
+char* get_var(Dictionary *dict, char *key);
 
 /*
  * Free a dictionary
@@ -63,6 +62,22 @@ void print_dict(Dictionary* dict);
  */
 unsigned hash(char *s);
 
+
+
+/*
+ * Load a dictionary from a file
+ * dict: dictionary to load into
+ * filename: file to load from
+ */
+void load_dict(Dictionary *dict, char *filename);
+
+
+/*
+ * Save a dictionary to a file
+ * dict: dictionary to save
+ * filename: file to save to
+ */
+void dump_dict(Dictionary *dict, char *filename);
 
 #endif
 
