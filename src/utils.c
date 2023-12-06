@@ -1,6 +1,6 @@
-#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "utils.h"
 // #include "debug.h"
 
 
@@ -57,7 +57,7 @@ void exec_command(char **argv, int background) {
             if (!background)
                 wait(NULL);
             else{
-                printf("Process %d running in background\n", pid);
+                printf("\nProcess %d running in background\n", pid);
                 }
         }
         free(path);
@@ -65,29 +65,6 @@ void exec_command(char **argv, int background) {
         printf("Command not found\n");
         
     }
-}
-
-char **parse_commandline_args(char *buffer, size_t buffer_size) {
-    char copy[buffer_size];
-    strncpy(copy, buffer, buffer_size);
-    char *token = strtok(copy, " ");
-
-    // count number of arguments
-    int argc = 0;
-    while (token != NULL) {
-        token = strtok(NULL, " ");
-        argc++;
-    }
-
-    // allocate memory for arguments + 1 for null terminator + 1 for path
-    char **argv = calloc(argc + 2, sizeof(char *));
-    token = strtok(buffer, " ");
-    for (int i = 0; i < argc; i++) {
-        argv[i] = token;
-        token = strtok(NULL, " ");
-    }
-
-    return argv;
 }
 
 

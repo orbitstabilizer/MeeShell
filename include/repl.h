@@ -25,6 +25,6 @@ void print_prompt(struct user *user);
 
 void sigint_handler(int sig);
 
-void main_loop(struct user *user, Dictionary *aliases);
+void main_loop(struct user *user, Dictionary *alias_dict);
 
 #endif

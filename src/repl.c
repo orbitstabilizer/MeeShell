@@ -1,22 +1,10 @@
 #include "repl.h"
+#include "tokenizer.h"
+#include "debug.h"
+
 
 char buffer[BUFFER_SIZE];
 struct user *current_user;
-
-enum command_type check_shell_commands(char *buffer, size_t buffer_size){
-    // special characters: > , >>, >>>, &, = 
-    for (size_t i = 0; i < buffer_size; i++) {
-        if (buffer[i] == '>') {
-            printf("> not implemented\n");
-            return NOT_IMPLEMENTED;
-        } else if (buffer[i] == '&') {
-            return BACKGROUND;
-        } else if (buffer[i] == '=') {
-            return ALIAS;
-        }
-    }
-    return NORMAL;
-}
 
 void print_prompt(struct user *user) {
     get_user(user);
@@ -31,8 +19,10 @@ void  sigint_handler(int sig) {
     memset(buffer, 0, BUFFER_SIZE);
 }
 
-void main_loop(struct user *user){
+
+void main_loop(struct user *user, Dictionary *aliases){
     current_user = user;
+    int skip_read = 0;
     
     while (1) {
         print_prompt(user);
@@ -42,6 +32,7 @@ void main_loop(struct user *user){
 
         if(fgets(buffer, BUFFER_SIZE, stdin) == NULL)
             break;
+        skip_read = 0;
 
         // C-l -> clear screen
         // if (buffer[0] == 12) {
@@ -49,59 +40,137 @@ void main_loop(struct user *user){
         //     continue;
         // }
 
-        if (buffer[0] == '\0') {
+        Tokenizer *tokenizer = tokenizer_new(buffer, BUFFER_SIZE);
+        tokenizer_consume(tokenizer);
+
+        Token *token_list = tokenizer->list;
+        size_t token_count = tokenizer->cur_token;
+
+        // enter without any input
+        if (token_list[0].type == TOKEN_EOF) {
             continue;
         }
-
-        // remove newline character
-        buffer[strlen(buffer) - 1] = '\0';
-        if (strlen(buffer) == 0) {
+        // command must start with some kind of literal
+        if (token_list[0].type != TOKEN_LITERAL) {
+            printf("Invalid input sequence\n");
             continue;
         }
+        // now we know the first token is a literal, it must be a command
+        // check if it is a shell command
+        // shell commands:
+        //   cd
+        //   exit
+        //   alias
 
-        // exit command
-        if (strcmp(buffer, "exit") == 0) {
+        // check for cd command
+
+        char command[token_list[0].length + 1];
+        get_token(tokenizer, 0, command);
+
+        // check for cd command
+        if (strcmp(command, "cd") == 0) {
+            // cd command must have exactly 1 argument
+            size_t token_ind = 1;
+            if (token_list[token_ind].type == TOKEN_QUOTE) {
+                token_ind++;
+                if (token_list[token_ind + 1].type != TOKEN_QUOTE) {
+                    printf("Quoted string not terminated\n");
+                    continue;
+                }
+            }
+            if (token_list[token_ind].type != TOKEN_LITERAL) {
+                printf("Invalid input sequence\n");
+                continue;
+            }
+            // change directory
+            char path[token_list[token_ind].length + 1];
+            strncpy(path, token_list[token_ind].start, token_list[token_ind].length);
+            path[token_list[token_ind].length] = '\0';
+            if (chdir(path) != 0) {
+                printf("Invalid path\n");
+            }
+            continue;
+        }
+        // check for exit command
+        if (strcmp(command, "exit") == 0) {
             break;
         }
+        // check for alias command
+        if (strcmp(command, "alias") == 0) {
+            if (token_list[1].type != TOKEN_LITERAL || token_list[2].type != TOKEN_EQUAL ){
+                printf("Invalid input sequence\n");
+                continue;
+            }
+            char key[token_list[1].length + 1];
+            get_token(tokenizer, 1, key);
 
-        // check for shell commands
-        enum command_type type = check_shell_commands(buffer, BUFFER_SIZE);
-
-        switch (type) {
-            case REDIRECT:
-                printf("Redirect not implemented\n");
-                continue;
-            case APPEND:
-                printf("Append not implemented\n");
-                continue;
-            case BACKGROUND:
-                {
-                char * ampersand = strchr(buffer, '&');
-                *ampersand = '\0';
-                char **argv = parse_commandline_args(buffer, BUFFER_SIZE);
-                exec_command(argv, 1);
-                continue;
+            size_t ind = 3;
+            if (token_list[ind].type == TOKEN_QUOTE) {
+                ind++;
+                if (token_list[ind + 1].type != TOKEN_QUOTE) {
+                    printf("Quoted string not terminated\n");
+                    continue;
                 }
-            case ALIAS:
-                printf("Alias not implemented\n");
+            }
+            if (token_list[ind].type != TOKEN_LITERAL) {
+                printf("Invalid input sequence\n");
                 continue;
-            case REVERSE:
-                printf("Reverse not implemented\n");
-                continue;
-            case NOT_IMPLEMENTED:
-                printf("Not implemented\n");
-                continue;
-            case NORMAL:
-                {
-                char **argv = parse_commandline_args(buffer, BUFFER_SIZE);
-                exec_command(argv, 0);
-                free(argv);
-                }
+            }
+            char value[token_list[ind].length + 1];
+            get_token(tokenizer, ind, value);
 
+            set_var(aliases, key, value);
+            printf("alias set\n");
+            continue;
         }
 
-        // parse commandline arguments
+        // this must be a external command, first check if it is an alias
+        // if it is an alias, replace the command with the alias
+
         
-        // run command
+
+        char *value = get_var(aliases, command);
+        if (value != NULL) {
+            printf("`%s` is an alias for `%s`\n", command, value);
+            strncpy(buffer, value, BUFFER_SIZE);
+            tokenizer_free(tokenizer);
+
+            skip_read = 1;
+            continue;
+
+        }
+        
+        char *argv[token_count + 1]; // +1 for NULL terminator
+        // first argument should be the current command
+        argv[0] = command;
+        size_t ind = 1;
+        int quote = 0;
+        int backgroud = 0;
+        for (size_t i = 1; i < token_count; i++) {
+            if (token_list[i].type == TOKEN_QUOTE) {
+                quote = !quote;
+                continue;
+            }
+            if (token_list[i].type == TOKEN_LITERAL) {
+                token_list[i].start[token_list[i].length] = '\0';
+                argv[ind] = token_list[i].start;
+                ind++;
+            }
+            if (token_list[i].type == TOKEN_AMPERSAND) {
+                backgroud = 1;
+            }
+        }
+        argv[ind] = NULL;
+        if (quote) {
+            printf("Quoted string not terminated\n");
+            continue;
+        }
+        exec_command(argv, backgroud);
+
+
+        tokenizer_free(tokenizer);
+
+
+
     }
 }

@@ -6,7 +6,10 @@
 struct user user;
 Dictionary *aliases;
 
-
+// TODO: empty space after quote is ignored
+// TODO: handle aliaess expansion
+// TODO: handle redirection
+//
 void setup(){
     // load aliases
     aliases = new_dictionary();
@@ -26,7 +29,7 @@ void teardown(){
 
 int main() {
     setup();
-    main_loop(&user);
+    main_loop(&user, aliases);
     teardown();
     return 0;
 }

@@ -16,6 +16,7 @@ typedef enum {
   TOKEN_ANGLE_BRACKET2, 
   TOKEN_ANGLE_BRACKET3, 
   TOKEN_AMPERSAND,
+  TOKEN_EQUAL,
   TOKEN_EOF,   
   TOKEN_QUOTE,  
 } TokenType;
@@ -57,6 +58,8 @@ typedef struct {
 Tokenizer *tokenizer_new(char *input, size_t input_len);
 void tokenizer_free(Tokenizer *self);
 void tokenizer_next(Tokenizer *self);
+void tokenizer_consume(Tokenizer *self);
+void get_token(Tokenizer *self, size_t index, char *buffer);
 
 
 #ifdef DEBUG
@@ -73,6 +76,7 @@ void token_name(TokenType type, char *name){
         MATCH(TOKEN_AMPERSAND);
         MATCH(TOKEN_EOF);
         MATCH(TOKEN_QUOTE);
+        MATCH(TOKEN_EQUAL);
         default:
             strcpy(name, "UNKNOWN");
     }
@@ -101,22 +105,22 @@ void print_tokenizer(Tokenizer *this){
 
 }
 
-int main(){
-    char *input = "echo \"hello world\" > file.txt >> file2.txt >>>  amu \n";
-    // char * input = "a >>>b";
-    printf("input: `%s`\n", input);
-    size_t input_len = strlen(input);
-    Tokenizer *tokenizer = tokenizer_new(input, input_len);
-    char token[100];
-    do {
-        tokenizer_next(tokenizer);
-    } while (tokenizer->list[tokenizer->cur_token -1].type != TOKEN_EOF);
+// int main(){
+//     char *input = "echo \"hello world\" > file.txt >> file2.txt >>>  amu \n";
+//     // char * input = "a >>>b";
+//     printf("input: `%s`\n", input);
+//     size_t input_len = strlen(input);
+//     Tokenizer *tokenizer = tokenizer_new(input, input_len);
+//     char token[100];
+//     do {
+//         tokenizer_next(tokenizer);
+//     } while (tokenizer->list[tokenizer->cur_token -1].type != TOKEN_EOF);
 
-    print_tokenizer(tokenizer);
+//     print_tokenizer(tokenizer);
 
-    tokenizer_free(tokenizer);
+//     tokenizer_free(tokenizer);
 
-}
+// }
 
 
 #endif

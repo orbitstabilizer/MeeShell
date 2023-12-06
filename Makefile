@@ -1,35 +1,42 @@
-
+EXEC=meeshell
 CC=gcc
-CFLAGS=-Wall -Wextra -Wpedantic -std=c11 -g -DDEBUG
-BUILD_DIR=build
-SRC_DIR=src
+INCLUDE_DIR=include/
+BUILD_DIR=build/
+SRC_DIR=src/
+
+BUILD_FLAGS=--std=gnu11 -I $(INCLUDE_DIR)
+DEBUG_FLAGS=-Wall -Wextra  -Wpedantic -g -DDEBUG
 
 
-all: clean main
+SRC=$(filter-out $(SRC_DIR)test.c, $(wildcard $(SRC_DIR)*.c))
+OBJ=$(patsubst $(SRC_DIR)%.c, $(BUILD_DIR)%.o, $(SRC))
 
-main: main.o utils.o dictionary.o repl.o
+
+all: clean $(EXEC)
+
+
+debug: BUILD_CFLAGS += $(DEBUG_CFLAGS)
+debug: $(EXEC)
+
+meeshell: $(OBJ)
 	# Building the executable
-	$(CC) $(CFLAGS)  $(BUILD_DIR)/main.o $(BUILD_DIR)/utils.o $(BUILD_DIR)/dictionary.o $(BUILD_DIR)/repl.o -o $(BUILD_DIR)/main
+	$(CC) $(BUILD_FLAGS) $(OBJ) -o $(EXEC) 
 
 	# Creating a symbolic link to the executable
-	if [ -L main ]; then rm main; fi
-	ln -s $(BUILD_DIR)/main main
+	# if [ -L main ]; then rm main; fi
+	# ln -s $(BUILD_DIR)$(EXEC) $(EXEC)
 
-main.o: $(SRC_DIR)/main.c
-	$(CC) $(CFLAGS) -c $(SRC_DIR)/main.c -o $(BUILD_DIR)/main.o
+build_dir:
+	if [ ! -d $(BUILD_DIR) ]; then mkdir $(BUILD_DIR); fi
 
-utils.o: $(SRC_DIR)/utils.c
-	$(CC) $(CFLAGS) -c $(SRC_DIR)/utils.c -o $(BUILD_DIR)/utils.o
+$(BUILD_DIR)%.o: $(SRC_DIR)%.c | build_dir
+	$(CC) $(BUILD_FLAGS) -c $< -o $@
 
-dictionary.o: $(SRC_DIR)/dictionary.c
-	$(CC) $(CFLAGS) -c $(SRC_DIR)/dictionary.c -o $(BUILD_DIR)/dictionary.o
 
-repl.o: $(SRC_DIR)/repl.c
-	$(CC) $(CFLAGS) -c $(SRC_DIR)/repl.c -o $(BUILD_DIR)/repl.o
 
 clean:
 	if [ -d $(BUILD_DIR) ]; then rm -rf $(BUILD_DIR)/*; else mkdir $(BUILD_DIR); fi
-	if [ -L main ]; then rm main; fi
+	if [ -f $(EXEC) ]; then rm $(EXEC); fi
 
 
 

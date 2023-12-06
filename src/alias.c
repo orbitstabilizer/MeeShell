@@ -21,7 +21,7 @@ void load_aliases(Dictionary *dict) {
             continue;
         }
         // printf("alias: %s, command: %s\n", alias, command);
-        dictionary_set(dict, alias, command);
+        set_var(dict, alias, command);
     }
     fclose(fp);
     if (line) {

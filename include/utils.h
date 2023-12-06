@@ -25,7 +25,7 @@ char* search_command(const char *command);
 void exec_command(char **argv, int background);
 
 
-char **parse_commandline_args(char *buffer, size_t buffer_size);
+// char **parse_commandline_args(char *buffer, size_t buffer_size);
 
 struct user {
     char username[BUFFER_SIZE];

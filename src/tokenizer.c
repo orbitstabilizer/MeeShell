@@ -53,6 +53,9 @@ void tokenizer_next(Tokenizer *self){
         case '&':
             init_token(token, TOKEN_AMPERSAND, 1, &self->input[self->cur_pos]);
             break;
+        case '=':
+            init_token(token, TOKEN_EQUAL, 1, &self->input[self->cur_pos]);
+            break;
         // case '\\':
         //     self->escape = !self->escape;
         //     break;
@@ -103,7 +106,7 @@ void tokenizer_next(Tokenizer *self){
     else{
         c = self->input[self->cur_pos];
         size_t len = 0;
-        while (c != ' ' && c != '\t' && c != '\n' && c != '\0' && c != EOF){
+        while (c != ' ' && c != '\t' && c != '\n' && c != '\0' && c != EOF && c != '"' && c != '&' && c != '=' && c != '>' ){
             len++;
             self->cur_pos++;
             c = self->input[self->cur_pos];
@@ -116,4 +119,21 @@ void tokenizer_next(Tokenizer *self){
 
 }
 
+void tokenizer_consume(Tokenizer *self){
+    do {
+        tokenizer_next(self);
+    } while (self->list[self->cur_token - 1].type != TOKEN_EOF);
+}
 
+
+void get_token(Tokenizer *self, size_t index, char *buffer){
+    if (index >= self->cur_token){
+        buffer[0] = '\0';
+        return;
+    }
+    Token *token = &self->list[index];
+    strncpy(buffer, token->start, token->length);
+    buffer[token->length] = '\0';
+    return;
+
+}
