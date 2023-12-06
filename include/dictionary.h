@@ -7,79 +7,74 @@
 /*
  * Chain struct
  * next: pointer to next entry in chain
- * name: name of variable
+ * key: name of variable
  * value: value of variable
  */
-typedef struct Chain { /* table entry: */
+typedef struct Chain {  /* table entry: */
     struct Chain *next; /* next entry in chain */
-    char *key; /* defined name */
+    char *key;          /* defined name */
     char *value;
-}Chain;
+} Chain;
 
 /*
  * Dictionary struct
  * hashtab: array of pointers to chains
  */
-typedef struct Dictionary{
-  Chain* hashtab[HASHSIZE];   
-} Dictionary;
+typedef struct {
+    Chain *hashtab[HASHSIZE];
+} Dict;
 
 /*
  * Create a new dictionary
  */
-Dictionary* new_dictionary();
+Dict *Dict__new();
 
 /*
  * Set a variable in the dictionary
  * dict: dictionary to set variable in
- * name: name of variable
+ * key: name of variable
  * value: value of variable
  */
-void set_var(Dictionary *dict, char *key, char *value);
+void Dict__set(Dict *dict, char *key, char *value);
 
 /*
  * Get a variable from the dictionary
  * dict: dictionary to get variable from
- * name: name of variable
+ * key: name of variable
  */
-char* get_var(Dictionary *dict, char *key);
+char *Dict__get(Dict *dict, char *key);
 
 /*
  * Free a dictionary
  * dict: dictionary to free
  */
-void free_dict(Dictionary* dict);
+void Dict__free(Dict *dict);
 
 /*
  * Print a dictionary
  * dict: dictionary to print
  */
-void print_dict(Dictionary* dict);
-
-/*
- * Hash function
- * s: string to hash
- */
-unsigned hash(char *s);
-
-
+void Dict__print(Dict *dict);
 
 /*
  * Load a dictionary from a file
  * dict: dictionary to load into
  * filename: file to load from
  */
-void load_dict(Dictionary *dict, char *filename);
-
+void Dict__load(Dict *dict, char *filename);
 
 /*
  * Save a dictionary to a file
  * dict: dictionary to save
  * filename: file to save to
  */
-void dump_dict(Dictionary *dict, char *filename);
+void Dict__dump(Dict *dict, char *filename);
+
+/*
+ * Unset a variable in the dictionary
+ * dict: dictionary to unset variable in
+ * key: name of variable
+ */
+int Dict__del(Dict *dict, char *key);
 
 #endif
-
-
-
