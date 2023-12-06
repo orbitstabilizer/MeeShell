@@ -6,13 +6,14 @@ User *User__new_user() {
     struct passwd *pws = getpwuid(user->uid);
 
     user->username = strdup(pws->pw_name);
-    char tmp[1024];
-    gethostname(tmp, 1024);
+    char tmp[BUFFER_SIZE];
+    gethostname(tmp, BUFFER_SIZE);
     user->hostname = strdup(tmp);
-    getcwd(tmp, 1024);
+    getcwd(tmp, BUFFER_SIZE);
     user->cwd = strdup(tmp);
     user->home = strdup(pws->pw_dir);
     user->shell = strdup(getenv("SHELL"));
+    memset(user->last_command, 0, sizeof(user->last_command));
     return user;
 }
 
@@ -26,10 +27,16 @@ void User__free_user(User *self) {
 }
 
 void User__update(User *self) {
-    char tmp[1024];
-    getcwd(tmp, 1024);
+    char tmp[BUFFER_SIZE];
+    getcwd(tmp, BUFFER_SIZE);
     free(self->cwd);
     self->cwd = strdup(tmp);
+}
+
+void User__set_last_command(User *self, char *command) {
+    size_t len = strlen(command);
+    strncpy(self->last_command, command, len);
+    self->last_command[len] = '\0';
 }
 
 void User__info(User *self) {
@@ -46,6 +53,7 @@ void User__info(User *self) {
     printf("Current Shell                : %s\n", self->shell);
     printf("Home Location                : %s\n", self->home);
     printf("Current Date and time        : %s\n", date_time);
+    printf("Last Executed Command        : %s\n", self->last_command);
 }
 // Get TTY and number of processes
 // char tty[32];

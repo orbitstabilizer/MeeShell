@@ -2,16 +2,26 @@
 #include "repl.h"
 #include "user.h"
 
-#define ALIAS_FILE "aliases.txt"
+#define ALIAS_FILE ".meeshrc"
 
 User *user = NULL;
 Dict *aliases;
 
 // TODO: finish bello
+// TODO: in >> if file doesn't exist it creates it, but it should not
+// TODO: should use parent name for shell?
+// TODO: it doens't recognize ~
 // TODO: implement >>>
 // TODO: implement ProcessList
 // TODO: empty space after quote is ignored
 // TODO: after moving process to background shell output gets messed up
+// TODO: clear screen
+        // C-l -> clear screen
+        // if (buffer[0] == 12) {
+        //     printf("\033[H\033[J");
+        //     continue;
+        // }
+
 
 void setup() {
     // load aliases

@@ -11,7 +11,6 @@
 #include <unistd.h>
 
 #define MAX_PATH_LENGTH 1024
-#define BUFFER_SIZE 256
 #define MAX_ARGS 256
 
 /*

@@ -27,32 +27,32 @@ void sigint_handler(int sig) {
     memset(buffer, 0, BUFFER_SIZE);
 }
 
-void handle_cd(Tokenizer *tokenizer) {
+char *next_literal(Tokenizer *tokenizer, size_t *ind) {
+    size_t err;
+    char *literal = Tokenizer_next_literal(tokenizer, ind, &err);
+    if (err == 1) {
+        display("next_literal: Quoted string not terminated\n");
+    } else if (err == 2) {
+        display("next_literal: Invalid input sequence\n");
+    }
+    return literal;
+}
+
+void handle_cd(Tokenizer *tokenizer, User *user) {
     // cd command must have exactly 1 argument
     size_t token_ind = 1;
-#define token_list tokenizer->list
-    if (token_list[token_ind].type == TOKEN_QUOTE) {
-        token_ind++;
-        if (token_list[token_ind + 1].type != TOKEN_QUOTE) {
-            display("Quoted string not terminated\n");
-            return;
-        }
-    }
-    if (token_list[token_ind].type != TOKEN_LITERAL) {
-        display("Invalid input sequence\n");
+    char *path = next_literal(tokenizer, &token_ind);
+    if (path == NULL) {
         return;
     }
     // change directory
-    char path[token_list[token_ind].length + 1];
-    strncpy(path, token_list[token_ind].start, token_list[token_ind].length);
-    path[token_list[token_ind].length] = '\0';
+    User__set_last_command(user, "cd");
     if (chdir(path) != 0) {
         display("Invalid path\n");
     }
-#undef token_list
 }
 
-void handle_alias(Tokenizer *tokenizer, Dict *aliases) {
+void handle_alias(Tokenizer *tokenizer, Dict *aliases, User *user) {
 #define token_list tokenizer->list
     if (token_list[1].type != TOKEN_LITERAL ||
         token_list[2].type != TOKEN_EQUAL) {
@@ -83,29 +83,86 @@ void handle_alias(Tokenizer *tokenizer, Dict *aliases) {
     Tokenizer__get_token(tokenizer, ind, value);
 
     Dict__set(aliases, key, value);
+    User__set_last_command(user, "alias");
     display("Alias set\n");
 #undef token_list
     return;
 }
 
-char *next_literal(Tokenizer *tokenizer, size_t *ind) {
-#define token_list tokenizer->list
-    // quoted literal
-    if (token_list[*ind].type == TOKEN_QUOTE) {
-        (*ind)++;
-        if (token_list[(*ind) + 1].type != TOKEN_QUOTE) {
-            display("next_literal: Quoted string not terminated\n");
-            return NULL;
+int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
+    // first argument should be the current command
+    size_t token_count = tokenizer->cur_token;
+    char *argv[token_count + 1]; // +1 for NULL terminator
+    argv[0] = command;
+    size_t ind = 1;
+    int quote = 0;
+    int backgroud = 0;
+    int redirect = -1;
+    char *std_in = NULL;
+    char *std_out = NULL;
+    char *std_err = NULL;
+    int mode = 0;
+    for (size_t i = 1; i < token_count; i++) {
+        switch (tokenizer->list[i].type) {
+        case TOKEN_AMPERSAND:
+            backgroud = 1;
+            if (i != token_count - 2) {
+                display("Error: & must be the last token\n");
+                return 1;
+            }
+            break;
+        case TOKEN_QUOTE:
+            quote = !quote;
+            break;
+            if (redirect != -1) {
+                display("Error: faulty redirection\n");
+                return 2;
+            }
+        case TOKEN_LITERAL:
+            tokenizer->list[i].start[tokenizer->list[i].length] = '\0';
+            argv[ind] = tokenizer->list[i].start;
+            ind++;
+            break;
+        case TOKEN_ANGLE_BRACKET1:
+            if (redirect != -1) {
+                display("Error: multiple redirection\n");
+                return 3;
+            } else {
+                redirect = 1;
+                mode = 0;
+                i++;
+                char *filename = next_literal(tokenizer, &i);
+                if (filename == NULL) {
+                    return 4;
+                }
+                std_out = filename;
+            }
+            break;
+        case TOKEN_ANGLE_BRACKET2:
+            if (redirect != -1) {
+                display("Error: multiple redirection\n");
+                return 5;
+            } else {
+                redirect = 1;
+                mode = 1;
+                i++;
+                char *filename = next_literal(tokenizer, &i);
+                if (filename == NULL) {
+                    return 6;
+                }
+                std_out = filename;
+            }
+            break;
+        case TOKEN_ANGLE_BRACKET3:
+            break;
+        default:
+            break;
         }
     }
-    if (token_list[*ind].type != TOKEN_LITERAL) {
-        display(token_list[*ind].start);
-        display("next_literal: Invalid input sequence\n");
-        return NULL;
-    }
-    token_list[*ind].start[token_list[*ind].length] = '\0';
-    return token_list[*ind].start;
-#undef token_list
+    argv[ind] = NULL;
+    User__set_last_command(user, argv[0]);
+    exec_command(argv, backgroud, std_in, std_out, std_err, mode);
+    return 0;
 }
 
 void main_loop(User *user, Dict *aliases) {
@@ -115,24 +172,15 @@ void main_loop(User *user, Dict *aliases) {
     while (1) {
         if (is_alias) {
         } else {
-            // read input
             print_prompt(user);
             memset(buffer, 0, BUFFER_SIZE);
             if (fgets(buffer, BUFFER_SIZE, stdin) == NULL)
                 break;
         }
-        // C-l -> clear screen
-        // if (buffer[0] == 12) {
-        //     printf("\033[H\033[J");
-        //     continue;
-        // }
-
         Tokenizer *tokenizer = Tokenizer__new(buffer, BUFFER_SIZE);
         Tokenizer__consume(tokenizer);
 
         Token *token_list = tokenizer->list;
-        size_t token_count = tokenizer->cur_token;
-        char *argv[token_count + 1]; // +1 for NULL terminator
 
         // enter without any input
         if (token_list[0].type == TOKEN_EOF) {
@@ -143,50 +191,32 @@ void main_loop(User *user, Dict *aliases) {
             display("Invalid input sequence\n");
             continue;
         }
-        // now we know the first token is a literal, it must be a command
-        // check if it is a shell command
-        // shell commands:
-        //   cd
-        //   exit
-        //   alias
-        //   bello
-
-        // check for cd command
 
         char command[token_list[0].length + 1];
         Tokenizer__get_token(tokenizer, 0, command);
 
-        // check for cd command
+        /* builtin commands: cd, exit, alias, bello */
         if (strcmp(command, "cd") == 0) {
-            handle_cd(tokenizer);
+            handle_cd(tokenizer, user);
             continue;
         }
-        // check for exit command
-        if (strcmp(command, "exit") == 0) {
+        if (strcmp(command, "exit") == 0) { 
             break;
         }
-        // check for alias command
-        if (!is_alias && strcmp(command, "alias") == 0) {
-            handle_alias(tokenizer, aliases);
+        if (!is_alias && strcmp(command, "alias") == 0) { 
+            handle_alias(tokenizer, aliases, user);
             continue;
         }
-        // check for bello command
-        if (strcmp(command, "bello") == 0) {
+        if (strcmp(command, "bello") == 0) { 
             User__info(user);
+            User__set_last_command(user, "bello");
             continue;
         }
-
         // this must be a external command, first check if it is an alias
-        // if it is an alias, replace the command with the alias
-
         if (!is_alias) { // avoid infinite loop
             char *value = Dict__get(aliases, command);
             if (value != NULL) {
                 display("`%s` is an alias for `%s`\n", command, value);
-                // strncpy(buffer, value, BUFFER_SIZE);
-                // buffer[strlen(value)] = '\n';
-                // display("Executing `%s`\n", buffer);
-                // replace the command with the alias
                 char tmp[BUFFER_SIZE];
                 strncpy(tmp, value, strlen(value));
                 tmp[strlen(value)] = ' ';
@@ -195,90 +225,13 @@ void main_loop(User *user, Dict *aliases) {
                 strncpy(buffer, tmp, BUFFER_SIZE);
                 buffer[strlen(tmp)] = '\n';
                 is_alias = true;
-
                 goto end;
-                continue;
             }
         } else {
             is_alias = false;
         }
 
-        // first argument should be the current command
-
-        argv[0] = command;
-        size_t ind = 1;
-        int quote = 0;
-        int backgroud = 0;
-        int redirect = -1;
-        char *std_in = NULL;
-        char *std_out = NULL;
-        char *std_err = NULL;
-        int mode = 0;
-        for (size_t i = 1; i < token_count; i++) {
-            switch (token_list[i].type) {
-            case TOKEN_AMPERSAND:
-                backgroud = 1;
-                if (i != token_count - 2) {
-                    display("Error: & must be the last token\n");
-                    goto error;
-                }
-                break;
-            case TOKEN_QUOTE:
-                quote = !quote;
-                break;
-                if (redirect != -1) {
-                    display("Error: faulty redirection\n");
-                    goto error;
-                }
-            case TOKEN_LITERAL:
-                token_list[i].start[token_list[i].length] = '\0';
-                argv[ind] = token_list[i].start;
-                ind++;
-                break;
-            case TOKEN_ANGLE_BRACKET1:
-                if (redirect != -1) {
-                    display("Error: multiple redirection\n");
-                    goto error;
-                } else {
-                    redirect = 1;
-                    mode = 0;
-                    i++;
-                    char *filename = next_literal(tokenizer, &i);
-                    if (filename == NULL) {
-                        goto error;
-                    }
-                    std_out = filename;
-                }
-                break;
-            case TOKEN_ANGLE_BRACKET2:
-                if (redirect != -1) {
-                    display("Error: multiple redirection\n");
-                    goto error;
-                } else {
-                    redirect = 1;
-                    mode = 1;
-                    i++;
-                    char *filename = next_literal(tokenizer, &i);
-                    if (filename == NULL) {
-                        goto error;
-                    }
-                    std_out = filename;
-                }
-                break;
-            case TOKEN_ANGLE_BRACKET3:
-                break;
-            default:
-                break;
-            }
-        }
-        argv[ind] = NULL;
-        // if (quote) {
-        //     display("Quoted string not terminated\n");
-        //     continue;
-        // }
-        exec_command(argv, backgroud, std_in, std_out, std_err, mode);
-
-    error:
+        handle_external_command(tokenizer, user, command);
     end:
         Tokenizer__free(tokenizer);
     }

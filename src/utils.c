@@ -75,7 +75,7 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
             if (!background)
                 wait(NULL);
             else {
-                printf("\nProcess %d running in background\n", pid);
+                printf("\nProcess %d running in background", pid);
             }
         }
         free(path);

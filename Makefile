@@ -1,5 +1,5 @@
 EXEC=meeshell
-CC=gcc
+CC=gcc-12
 INCLUDE_DIR=include/
 BUILD_DIR=build/
 SRC_DIR=src/
@@ -12,21 +12,18 @@ SRC=$(filter-out $(SRC_DIR)test.c, $(wildcard $(SRC_DIR)*.c))
 OBJ=$(patsubst $(SRC_DIR)%.c, $(BUILD_DIR)%.o, $(SRC))
 
 
-debug: $(EXEC)
 all: clean $(EXEC)
+debug: $(EXEC)
 
 
 debug: BUILD_CFLAGS += $(DEBUG_CFLAGS)
+	#  Debug mode enabled
 
 meeshell: $(OBJ)
-	# Building the executable
+	#  Building target
 	$(CC) $(BUILD_FLAGS) $(OBJ) -o $(EXEC) 
-
-	# Creating a symbolic link to the executable
-	# if [ -L main ]; then rm main; fi
-	# ln -s $(BUILD_DIR)$(EXEC) $(EXEC)
-
 build_dir:
+	#  Creating build directory
 	if [ ! -d $(BUILD_DIR) ]; then mkdir $(BUILD_DIR); fi
 
 $(BUILD_DIR)%.o: $(SRC_DIR)%.c | build_dir
@@ -35,6 +32,7 @@ $(BUILD_DIR)%.o: $(SRC_DIR)%.c | build_dir
 
 
 clean:
+	#  Cleaning up
 	if [ -d $(BUILD_DIR) ]; then rm -rf $(BUILD_DIR)/*; else mkdir $(BUILD_DIR); fi
 	if [ -f $(EXEC) ]; then rm $(EXEC); fi
 
