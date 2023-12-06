@@ -1,3 +1,7 @@
 -std=gnu11
 -I 
 /Users/yusufakin/tmp/cmpe/322/project1/include/
+-o
+src/meeshell
+
+

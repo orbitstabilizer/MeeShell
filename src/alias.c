@@ -1,12 +1,9 @@
-
+#include "dictionary.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "dictionary.h"
 
-
-
-void load_aliases(Dictionary *dict) {
+void load_aliases(Dict *dict) {
     FILE *fp = fopen("aliases.txt", "r");
     if (fp == NULL) {
         return;
@@ -21,7 +18,7 @@ void load_aliases(Dictionary *dict) {
             continue;
         }
         // printf("alias: %s, command: %s\n", alias, command);
-        set_var(dict, alias, command);
+        Dict__set(dict, alias, command);
     }
     fclose(fp);
     if (line) {

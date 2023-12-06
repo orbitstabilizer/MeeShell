@@ -12,11 +12,11 @@ SRC=$(filter-out $(SRC_DIR)test.c, $(wildcard $(SRC_DIR)*.c))
 OBJ=$(patsubst $(SRC_DIR)%.c, $(BUILD_DIR)%.o, $(SRC))
 
 
+debug: $(EXEC)
 all: clean $(EXEC)
 
 
 debug: BUILD_CFLAGS += $(DEBUG_CFLAGS)
-debug: $(EXEC)
 
 meeshell: $(OBJ)
 	# Building the executable

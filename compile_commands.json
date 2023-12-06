@@ -1,0 +1,33 @@
+[
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -c -o main.o main.c -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/src/main.c"
+    },
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -c -o repl.o repl.c -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/src/repl.c"
+    },
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -c -o tokenizer.o tokenizer.c -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/src/tokenizer.c"
+    },
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -c -o utils.o utils.c -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/src/utils.c"
+    },
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -c -o dictionary.o dictionary.c -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/src/dictionary.c"
+    },
+    {
+        "directory": "/Users/yusufakin/tmp/cmpe/322/project1/",
+        "command": "gcc -o main main.o repl.o tokenizer.o utils.o dictionary.o -I/Users/yusufakin/tmp/cmpe/322/project1/include/",
+        "file": "/Users/yusufakin/tmp/cmpe/322/project1/main"
+    }
+    {
+]
