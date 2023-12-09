@@ -28,12 +28,13 @@ void Tokenizer__next(Tokenizer *self) {
         return;
     }
     char c = self->input[self->cur_pos];
-    if (c == ' ' || c == '\t' || c == '\n') {
-        while (c == ' ' || c == '\t' || c == '\n') {
-            self->cur_pos++;
-            c = self->input[self->cur_pos];
+    if (!self->quote)
+        if (c == ' ' || c == '\t' || c == '\n') {
+            while (c == ' ' || c == '\t' || c == '\n') {
+                self->cur_pos++;
+                c = self->input[self->cur_pos];
+            }
         }
-    }
     if (c == '\0' || c == EOF) {
         init_token(token, TOKEN_EOF, 0, NULL);
         self->cur_token++;
