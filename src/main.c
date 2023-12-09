@@ -7,21 +7,15 @@
 User *user = NULL;
 Dict *aliases;
 
+// TODO: bello redirection
 // TODO: finish bello
-// TODO: in >> if file doesn't exist it creates it, but it should not
-// TODO: should use parent name for shell?
-// TODO: it doens't recognize ~
-// TODO: implement >>>
-// TODO: implement ProcessList
-// TODO: empty space after quote is ignored
-// TODO: after moving process to background shell output gets messed up
+// TODO: recursive alias
 // TODO: clear screen
         // C-l -> clear screen
         // if (buffer[0] == 12) {
         //     printf("\033[H\033[J");
         //     continue;
         // }
-
 
 void setup() {
     // load aliases
@@ -30,9 +24,13 @@ void setup() {
     Dict__load(aliases, ALIAS_FILE);
     // catch ctrl-c
     signal(SIGINT, sigint_handler);
+    signal(SIGCHLD, sigchld_handler);
 }
 
 void teardown() {
+    for (int i = 0 ; i< user->bg_pids_count; i++) {
+        kill(user->bg_pids[i], SIGHUP);
+    }
     printf("\nExiting shell\n");
     // save aliases
     Dict__dump(aliases, ALIAS_FILE);

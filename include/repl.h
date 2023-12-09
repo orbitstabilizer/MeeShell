@@ -11,6 +11,7 @@
 void print_prompt(User *user);
 
 void sigint_handler(int sig);
+void sigchld_handler(int sig);
 
 void main_loop(User *user, Dict *alias_dict);
 

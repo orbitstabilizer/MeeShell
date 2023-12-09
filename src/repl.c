@@ -16,7 +16,18 @@ void display(const char *format, ...) {
 
 void print_prompt(User *user) {
     User__update(user);
-    printf("%s@%s %s --- ", user->username, user->hostname, user->cwd);
+    char *cwd = user->cwd;
+    char *home = user->home;
+    char path[strlen(cwd) + 1];
+    if (strncmp(cwd, home, strlen(home)) == 0) {
+        path[0] = '~';
+        strncpy(path + 1, cwd + strlen(home), strlen(cwd) - strlen(home));
+        path[strlen(cwd) - strlen(home) + 1] = '\0';
+    } else {
+        strncpy(path, cwd, strlen(cwd));
+        path[strlen(cwd)] = '\0';
+    }
+    printf("%s@%s %s --- ", user->username, user->hostname, path);
     fflush(stdout);
 }
 // Ctrl-C was pressed
@@ -25,6 +36,18 @@ void sigint_handler(int sig) {
     printf("\n");
     print_prompt(current_user);
     memset(buffer, 0, BUFFER_SIZE);
+}
+
+void sigchld_handler(int sig) { // walking dead!
+    UNUSED(sig);
+    int status;
+    // printf("child status changed\n");
+    for (int i = 0; i < current_user->bg_pids_count; i++) {
+        pid_t pid = waitpid(current_user->bg_pids[i], &status, WNOHANG);
+        if (pid > 0) {
+            User__remove_bg_process(current_user, pid);
+        }
+    }
 }
 
 char *next_literal(Tokenizer *tokenizer, size_t *ind) {
@@ -113,11 +136,11 @@ int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
             break;
         case TOKEN_QUOTE:
             quote = !quote;
-            break;
             if (redirect != -1) {
                 display("Error: faulty redirection\n");
                 return 2;
             }
+            break;
         case TOKEN_LITERAL:
             tokenizer->list[i].start[tokenizer->list[i].length] = '\0';
             argv[ind] = tokenizer->list[i].start;
@@ -154,6 +177,18 @@ int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
             }
             break;
         case TOKEN_ANGLE_BRACKET3:
+            if (redirect != -1) {
+                display("Error: multiple redirection\n");
+                return 7;
+            } else {
+                redirect = 2;
+                i++;
+                char *filename = next_literal(tokenizer, &i);
+                if (filename == NULL) {
+                    return 8;
+                }
+                std_out = filename;
+            }
             break;
         default:
             break;
@@ -161,13 +196,19 @@ int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
     }
     argv[ind] = NULL;
     User__set_last_command(user, argv[0]);
-    exec_command(argv, backgroud, std_in, std_out, std_err, mode);
+    if (redirect == 2){
+        exec_with_pipe(argv,std_out, backgroud, user);
+    }
+    else{
+        exec_command(argv, backgroud, std_in, std_out, std_err, mode, user);
+    }    
     return 0;
 }
 
 void main_loop(User *user, Dict *aliases) {
     current_user = user;
     bool is_alias = false;
+    Tokenizer *tokenizer=NULL;
 
     while (1) {
         if (is_alias) {
@@ -177,7 +218,12 @@ void main_loop(User *user, Dict *aliases) {
             if (fgets(buffer, BUFFER_SIZE, stdin) == NULL)
                 break;
         }
-        Tokenizer *tokenizer = Tokenizer__new(buffer, BUFFER_SIZE);
+        if (tokenizer != NULL) {
+            Tokenizer__free(tokenizer);
+            tokenizer = NULL;
+
+        }
+        tokenizer = Tokenizer__new(buffer, BUFFER_SIZE);
         Tokenizer__consume(tokenizer);
 
         Token *token_list = tokenizer->list;
@@ -195,6 +241,28 @@ void main_loop(User *user, Dict *aliases) {
         char command[token_list[0].length + 1];
         Tokenizer__get_token(tokenizer, 0, command);
 
+        //  first check if it is an alias
+        if (!is_alias) { // avoid infinite loop
+            char *value = Dict__get(aliases, command);
+            if (value != NULL) {
+                display("`%s` is an alias for `%s`\n", command, value);
+                // substitute the alias
+                char tmp[BUFFER_SIZE];
+                strncpy(tmp, buffer, BUFFER_SIZE);
+                size_t len_c = strlen(command);
+                size_t len_v = strlen(value);
+                strncpy(buffer, value, len_v);
+                buffer[len_v] = ' ';
+                strncpy(buffer + len_v + 1, tmp + len_c, BUFFER_SIZE - len_v - 1);
+
+
+                is_alias = true;
+                continue;
+                
+            }
+        } else {
+            is_alias = false;
+        }
         /* builtin commands: cd, exit, alias, bello */
         if (strcmp(command, "cd") == 0) {
             handle_cd(tokenizer, user);
@@ -212,27 +280,13 @@ void main_loop(User *user, Dict *aliases) {
             User__set_last_command(user, "bello");
             continue;
         }
-        // this must be a external command, first check if it is an alias
-        if (!is_alias) { // avoid infinite loop
-            char *value = Dict__get(aliases, command);
-            if (value != NULL) {
-                display("`%s` is an alias for `%s`\n", command, value);
-                char tmp[BUFFER_SIZE];
-                strncpy(tmp, value, strlen(value));
-                tmp[strlen(value)] = ' ';
-                strncpy(tmp + strlen(value) + 1, buffer + strlen(command),
-                        BUFFER_SIZE);
-                strncpy(buffer, tmp, BUFFER_SIZE);
-                buffer[strlen(tmp)] = '\n';
-                is_alias = true;
-                goto end;
-            }
-        } else {
-            is_alias = false;
-        }
 
         handle_external_command(tokenizer, user, command);
-    end:
+    }
+    if (tokenizer != NULL) {
         Tokenizer__free(tokenizer);
     }
+
+
+
 }
