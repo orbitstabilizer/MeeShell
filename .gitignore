@@ -10,3 +10,8 @@ main
 
 
 meeshell
+assets
+.cache/clangd/index
+compile_flags.txt
+michelle
+.meeshrc
