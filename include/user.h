@@ -7,6 +7,7 @@
 
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/utsname.h>
 #include <time.h>
 

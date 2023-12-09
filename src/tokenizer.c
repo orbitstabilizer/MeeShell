@@ -9,6 +9,7 @@ Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     self->cur_token = 0;
     self->quote = 0;
     self->escape = 0;
+    Tokenizer__consume(self);
     return self;
 }
 

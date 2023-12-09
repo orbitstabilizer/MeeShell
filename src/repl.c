@@ -1,11 +1,5 @@
 #include "repl.h"
-#include "debug.h"
-#include "tokenizer.h"
 #include "utils.h"
-#include <stdarg.h> // variadic functions
-
-char buffer[BUFFER_SIZE];
-User *current_user;
 
 void display(const char *format, ...) {
     va_list args;
@@ -14,7 +8,51 @@ void display(const char *format, ...) {
     va_end(args);
 }
 
-void print_prompt(User *user) {
+char *next_literal(Tokenizer *tokenizer, size_t *ind) {
+    size_t err;
+    char *literal = Tokenizer_next_literal(tokenizer, ind, &err);
+    if (err == 1) {
+        // display("next_literal: Quoted string not terminated\n");
+        display("Syntax error: Quoted string not terminated\n");
+    } else if (err == 2) {
+        display("ERROR: Invalid input sequence\n");
+    }
+    return literal;
+}
+
+Repl *Repl__new(User *user, Dict *aliases) {
+    Repl *self = malloc(sizeof(Repl));
+    // fields
+    self->user = user;
+    self->aliases = aliases;
+    self->tokenizer = NULL;
+
+    // methods
+    self->read_prompt = Repl__read_prompt;
+    self->free = Repl__free;
+    self->main_loop = Repl__main_loop;
+    self->print_prompt = Repl__print_prompt;
+    self->handle_cd = Repl__handle_cd;
+    self->handle_alias = Repl__handle_alias;
+    self->handle_external_command = Repl__handle_external_command;
+    self->check_alias = Repl__check_alias;
+    self->handle_bello = Repl__handle_bello;
+    return self;
+}
+
+void Repl__free(Repl *self) {
+    if (self->tokenizer != NULL) {
+        Tokenizer__free(self->tokenizer);
+    }
+    free(self); }
+
+bool Repl__read_prompt(Repl *self) {
+    memset(self->buffer, 0, BUFFER_SIZE);
+    return (fgets(self->buffer, BUFFER_SIZE, stdin) != NULL);
+}
+
+void Repl__print_prompt(Repl *self) {
+    User *user = self->user;
     User__update(user);
     char *cwd = user->cwd;
     char *home = user->home;
@@ -30,67 +68,37 @@ void print_prompt(User *user) {
     printf("%s@%s %s --- ", user->username, user->hostname, path);
     fflush(stdout);
 }
-// Ctrl-C was pressed
-void sigint_handler(int sig) {
-    UNUSED(sig);
-    printf("\n");
-    print_prompt(current_user);
-    memset(buffer, 0, BUFFER_SIZE);
-}
 
-void sigchld_handler(int sig) { // walking dead!
-    UNUSED(sig);
-    int status;
-    // printf("child status changed\n");
-    for (int i = 0; i < current_user->bg_pids_count; i++) {
-        pid_t pid = waitpid(current_user->bg_pids[i], &status, WNOHANG);
-        if (pid > 0) {
-            User__remove_bg_process(current_user, pid);
-        }
-    }
-}
-
-char *next_literal(Tokenizer *tokenizer, size_t *ind) {
-    size_t err;
-    char *literal = Tokenizer_next_literal(tokenizer, ind, &err);
-    if (err == 1) {
-        display("next_literal: Quoted string not terminated\n");
-    } else if (err == 2) {
-        display("next_literal: Invalid input sequence\n");
-    }
-    return literal;
-}
-
-void handle_cd(Tokenizer *tokenizer, User *user) {
+void Repl__handle_cd(Repl *self) {
     // cd command must have exactly 1 argument
     size_t token_ind = 1;
-    char *path = next_literal(tokenizer, &token_ind);
+    char *path = next_literal(self->tokenizer, &token_ind);
     if (path == NULL) {
         return;
     }
     // change directory
-    User__set_last_command(user, "cd");
+    User__set_last_command(self->user, "cd");
     if (chdir(path) != 0) {
-        display("Invalid path\n");
+        display("cd: %s: No such file or directory\n", path);
     }
 }
 
-void handle_alias(Tokenizer *tokenizer, Dict *aliases, User *user) {
-#define token_list tokenizer->list
+void Repl__handle_alias(Repl *self) {
+    Token *token_list = self->tokenizer->list;
     if (token_list[1].type != TOKEN_LITERAL ||
         token_list[2].type != TOKEN_EQUAL) {
         display("Invalid input sequence\n");
         return;
     }
     char key[token_list[1].length + 1];
-    Tokenizer__get_token(tokenizer, 1, key);
+    Tokenizer__get_token(self->tokenizer, 1, key);
 
     size_t ind = 3;
     if (token_list[ind].type == TOKEN_QUOTE) {
         ind++;
         if (token_list[ind].type == TOKEN_QUOTE) { // empty string
             display("Alias unset\n");
-            Dict__del(aliases, key);
+            Dict__del(self->aliases, key);
             return;
         }
         if (token_list[ind + 1].type != TOKEN_QUOTE) {
@@ -103,16 +111,16 @@ void handle_alias(Tokenizer *tokenizer, Dict *aliases, User *user) {
         return;
     }
     char value[token_list[ind].length + 1];
-    Tokenizer__get_token(tokenizer, ind, value);
+    Tokenizer__get_token(self->tokenizer, ind, value);
 
-    Dict__set(aliases, key, value);
-    User__set_last_command(user, "alias");
+    Dict__set(self->aliases, key, value);
+    User__set_last_command(self->user, "alias");
     display("Alias set\n");
-#undef token_list
     return;
 }
 
-int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
+int Repl__handle_external_command(Repl *self, char *command) {
+    Tokenizer *tokenizer = self->tokenizer;
     // first argument should be the current command
     size_t token_count = tokenizer->cur_token;
     char *argv[token_count + 1]; // +1 for NULL terminator
@@ -195,38 +203,40 @@ int handle_external_command(Tokenizer *tokenizer, User *user, char *command) {
         }
     }
     argv[ind] = NULL;
-    User__set_last_command(user, argv[0]);
-    if (redirect == 2){
-        exec_with_pipe(argv,std_out, backgroud, user);
+    User__set_last_command(self->user, argv[0]);
+    if (redirect == 2) {
+        exec_with_pipe(argv, std_out, backgroud, self->user);
+    } else {
+        exec_command(argv, backgroud, std_in, std_out, std_err, mode,
+                     self->user);
     }
-    else{
-        exec_command(argv, backgroud, std_in, std_out, std_err, mode, user);
-    }    
     return 0;
 }
 
-void main_loop(User *user, Dict *aliases) {
-    current_user = user;
+void Repl__handle_bello(Repl *self){
+    User__info(self->user);
+    User__set_last_command(self->user, "bello");
+}
+
+void Repl__main_loop(Repl *self) {
     bool is_alias = false;
-    Tokenizer *tokenizer=NULL;
+    Tokenizer *tokenizer = NULL;
+    Token *token_list;
 
     while (1) {
-        if (is_alias) {
-        } else {
-            print_prompt(user);
-            memset(buffer, 0, BUFFER_SIZE);
-            if (fgets(buffer, BUFFER_SIZE, stdin) == NULL)
+        if (!is_alias) {
+            self->print_prompt(self);
+            if (!self->read_prompt(self)) {
                 break;
+            }
         }
         if (tokenizer != NULL) {
             Tokenizer__free(tokenizer);
             tokenizer = NULL;
-
         }
-        tokenizer = Tokenizer__new(buffer, BUFFER_SIZE);
-        Tokenizer__consume(tokenizer);
-
-        Token *token_list = tokenizer->list;
+        tokenizer = Tokenizer__new(self->buffer, BUFFER_SIZE);
+        self->tokenizer = tokenizer;
+        token_list = tokenizer->list;
 
         // enter without any input
         if (token_list[0].type == TOKEN_EOF) {
@@ -234,59 +244,51 @@ void main_loop(User *user, Dict *aliases) {
         }
         // command must start with some kind of literal
         if (token_list[0].type != TOKEN_LITERAL) {
-            display("Invalid input sequence\n");
+            display("Error: invalid input sequence\n");
             continue;
         }
-
         char command[token_list[0].length + 1];
         Tokenizer__get_token(tokenizer, 0, command);
 
         //  first check if it is an alias
-        if (!is_alias) { // avoid infinite loop
-            char *value = Dict__get(aliases, command);
-            if (value != NULL) {
-                display("`%s` is an alias for `%s`\n", command, value);
-                // substitute the alias
-                char tmp[BUFFER_SIZE];
-                strncpy(tmp, buffer, BUFFER_SIZE);
-                size_t len_c = strlen(command);
-                size_t len_v = strlen(value);
-                strncpy(buffer, value, len_v);
-                buffer[len_v] = ' ';
-                strncpy(buffer + len_v + 1, tmp + len_c, BUFFER_SIZE - len_v - 1);
-
-
-                is_alias = true;
-                continue;
-                
-            }
-        } else {
-            is_alias = false;
-        }
+        is_alias = self->check_alias(self, is_alias, command);
         /* builtin commands: cd, exit, alias, bello */
         if (strcmp(command, "cd") == 0) {
-            handle_cd(tokenizer, user);
+            self->handle_cd(self);
             continue;
         }
-        if (strcmp(command, "exit") == 0) { 
+        if (strcmp(command, "exit") == 0) {
             break;
         }
-        if (!is_alias && strcmp(command, "alias") == 0) { 
-            handle_alias(tokenizer, aliases, user);
+        if (!is_alias && strcmp(command, "alias") == 0) {
+            self->handle_alias(self);
             continue;
         }
-        if (strcmp(command, "bello") == 0) { 
-            User__info(user);
-            User__set_last_command(user, "bello");
+        if (strcmp(command, "bello") == 0) {
+            self->handle_bello(self);
             continue;
         }
-
-        handle_external_command(tokenizer, user, command);
+        // Repl__handle_external_command(tokenizer, user, command);
+        self->handle_external_command(self, command);
     }
-    if (tokenizer != NULL) {
-        Tokenizer__free(tokenizer);
+}
+
+bool Repl__check_alias(Repl *self, bool is_alias, char *command) {
+    if (!is_alias) { // avoid infinite loop
+        char *value = Dict__get(self->aliases, command);
+        if (value != NULL) {
+            display("`%s` is an alias for `%s`\n", command, value);
+            // substitute the alias
+            char tmp[BUFFER_SIZE];
+            strncpy(tmp, self->buffer, BUFFER_SIZE);
+            size_t len_c = strlen(command);
+            size_t len_v = strlen(value);
+            strncpy(self->buffer, value, len_v);
+            self->buffer[len_v] = ' ';
+            strncpy(self->buffer + len_v + 1, tmp + len_c,
+                    BUFFER_SIZE - len_v - 1);
+            return true;
+        }
     }
-
-
-
+    return false;
 }
