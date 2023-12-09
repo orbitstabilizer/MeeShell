@@ -1,4 +1,26 @@
 #include "utils.h"
+#include <errno.h>
+#include <time.h>
+
+/* msleep(): Sleep for the requested number of milliseconds. */
+int msleep(long msec) {
+    struct timespec ts;
+    int res;
+
+    if (msec < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+
+    do {
+        res = nanosleep(&ts, &ts);
+    } while (res && errno == EINTR);
+
+    return res;
+}
 
 char *search_command(const char *command) {
     char *path = getenv("PATH");
@@ -10,8 +32,7 @@ char *search_command(const char *command) {
     char *path_copy = strdup(path); // Duplicate the string pointed to by path
     //
     char *path_token = strtok(path_copy, ":");
-    char *command_path =
-        calloc(1, MAX_PATH_LENGTH); // Allocate memory for the command path
+    char *command_path = calloc(1, MAX_PATH_LENGTH); // Allocate memory for the command path
     while (path_token != NULL) {
         path_token = strtok(NULL, ":");
         if (path_token == NULL) {
@@ -27,16 +48,18 @@ char *search_command(const char *command) {
          write permission, and X_OK for execute/search permission), or the
          existence test (F_OK).
         */
-        if (access(command_path, X_OK) ==
-            0) { // Check if the file exists and is executable
+        if (access(command_path, X_OK) == 0) { // Check if the file exists and is executable
+            free(path_copy);
             return command_path;
         }
     }
+    free(path_copy);
+    free(command_path);
     return NULL;
 }
 
 void exec_command(char **argv, int background, char *std_in, char *std_out,
-                  char *std_err, int mode) {
+                  char *std_err, int mode, User *user) {
     char *path = search_command(argv[0]);
     if (path != NULL) {
         // save stdin, stdout, stderr
@@ -75,7 +98,9 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
             if (!background)
                 wait(NULL);
             else {
-                printf("\nProcess %d running in background", pid);
+                User__add_bg_process(user, pid);
+                msleep(100);
+                // printf("\nProcess %d running in background\n", pid);
             }
         }
         free(path);
@@ -83,3 +108,86 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
         printf("Command not found\n");
     }
 }
+
+/*
+ * 0: success
+ * 1: command not found
+ * 2: fork failed
+ * 3: file open failed
+ */
+int exec_with_pipe(char **argv, char *file, int bg, User *user) {
+    char *path = search_command(argv[0]);
+    int status = 0;
+    if (path == NULL) {
+        status = 1;
+        goto end;
+    }
+    pid_t pid = -1;
+    if (bg) {
+        pid = fork();
+    }
+    if (pid > 0) {
+        User__add_bg_process(user, pid);
+        goto end;
+    }
+    int fd[2];
+    pipe(fd);
+    pid = fork();
+    if (pid < 0) {
+        status = 2;
+        goto end;
+    }
+    if (pid == 0) {
+        close(fd[0]);
+        dup2(fd[1], STDOUT_FILENO);
+        execv(path, argv);
+    } else {
+        close(fd[1]);
+        size_t capacity = 256;
+        size_t size = 0;
+        char *buffer = malloc(capacity);
+        while (1) {
+            ssize_t count = read(fd[0], buffer + size, capacity - size);
+            if (count == 0) {
+                break;
+            }
+            size += count;
+            if (capacity > 1000000) {
+                break;
+            }
+            if (size == capacity) {
+                capacity *= 2;
+                buffer = realloc(buffer, capacity);
+            }
+
+        }
+
+        FILE *fp = fopen(file, "a");
+        if (fp == NULL) {
+            free(buffer);
+            status = 3;
+            goto end;
+        }
+        if (buffer[size - 1] == '\n') {
+            size--;
+        }
+        for (int i = size - 1; i >= 0; i--) {
+            fputc(buffer[i], fp);
+        }
+        fputc('\n', fp);
+        fclose(fp);
+        close(fd[0]);
+
+        free(buffer);
+        wait(NULL);
+    }
+    if (bg) {
+        exit(0);
+    }
+
+end:
+    free(path);
+    return status;
+}
+
+
