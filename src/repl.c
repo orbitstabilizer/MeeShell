@@ -10,7 +10,7 @@ void display(const char *format, ...) {
 
 char *next_literal(Tokenizer *tokenizer, size_t *ind) {
     size_t err;
-    char *literal = Tokenizer_next_literal(tokenizer, ind, &err);
+    char *literal = tokenizer->next_literal(tokenizer, ind, &err);
     if (err == 1) {
         // display("next_literal: Quoted string not terminated\n");
         display("Syntax error: Quoted string not terminated\n");
@@ -42,7 +42,7 @@ Repl *Repl__new(User *user, Dict *aliases) {
 
 void Repl__free(Repl *self) {
     if (self->tokenizer != NULL) {
-        Tokenizer__free(self->tokenizer);
+        self->tokenizer->free(self->tokenizer);
     }
     free(self); }
 
@@ -91,7 +91,7 @@ void Repl__handle_alias(Repl *self) {
         return;
     }
     char key[token_list[1].length + 1];
-    Tokenizer__get_token(self->tokenizer, 1, key);
+    self->tokenizer->get_token(self->tokenizer, 1, key);
 
     size_t ind = 3;
     if (token_list[ind].type == TOKEN_QUOTE) {
@@ -111,7 +111,7 @@ void Repl__handle_alias(Repl *self) {
         return;
     }
     char value[token_list[ind].length + 1];
-    Tokenizer__get_token(self->tokenizer, ind, value);
+    self->tokenizer->get_token(self->tokenizer, ind, value);
 
     Dict__set(self->aliases, key, value);
     User__set_last_command(self->user, "alias");
@@ -231,7 +231,7 @@ void Repl__main_loop(Repl *self) {
             }
         }
         if (tokenizer != NULL) {
-            Tokenizer__free(tokenizer);
+            tokenizer->free(tokenizer);
             tokenizer = NULL;
         }
         tokenizer = Tokenizer__new(self->buffer, BUFFER_SIZE);
@@ -248,10 +248,13 @@ void Repl__main_loop(Repl *self) {
             continue;
         }
         char command[token_list[0].length + 1];
-        Tokenizer__get_token(tokenizer, 0, command);
+        tokenizer->get_token(tokenizer, 0, command);
 
         //  first check if it is an alias
         is_alias = self->check_alias(self, is_alias, command);
+        if (is_alias) {
+            continue;
+        }
         /* builtin commands: cd, exit, alias, bello */
         if (strcmp(command, "cd") == 0) {
             self->handle_cd(self);
@@ -268,7 +271,6 @@ void Repl__main_loop(Repl *self) {
             self->handle_bello(self);
             continue;
         }
-        // Repl__handle_external_command(tokenizer, user, command);
         self->handle_external_command(self, command);
     }
 }

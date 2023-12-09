@@ -40,7 +40,8 @@ typedef struct {
  * token_list: list of tokens
  * cur_token: current token
  */
-typedef struct {
+typedef struct Tokenizer Tokenizer;
+struct Tokenizer {
     char *input;
     size_t cur_pos;
     size_t input_len;
@@ -50,7 +51,14 @@ typedef struct {
     size_t cur_token;
     bool quote;
     bool escape;
-} Tokenizer;
+    // methods
+    void (*next)(Tokenizer *self);
+    void (*free)(Tokenizer *self);
+    void (*consume)(Tokenizer *self);
+    void (*get_token)(Tokenizer *self, size_t index, char *buffer);
+    char *(*next_literal)(Tokenizer *self, size_t *ind, size_t *err);
+
+};
 
 Tokenizer *Tokenizer__new(char *input, size_t input_len);
 void Tokenizer__free(Tokenizer *self);
