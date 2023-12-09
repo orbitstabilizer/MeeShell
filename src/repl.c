@@ -53,7 +53,7 @@ bool Repl__read_prompt(Repl *self) {
 
 void Repl__print_prompt(Repl *self) {
     User *user = self->user;
-    User__update(user);
+    user->update(user);
     char *cwd = user->cwd;
     char *home = user->home;
     char path[strlen(cwd) + 1];
@@ -77,7 +77,7 @@ void Repl__handle_cd(Repl *self) {
         return;
     }
     // change directory
-    User__set_last_command(self->user, "cd");
+    self->user->set_last_command(self->user, "cd");
     if (chdir(path) != 0) {
         display("cd: %s: No such file or directory\n", path);
     }
@@ -114,7 +114,7 @@ void Repl__handle_alias(Repl *self) {
     self->tokenizer->get_token(self->tokenizer, ind, value);
 
     Dict__set(self->aliases, key, value);
-    User__set_last_command(self->user, "alias");
+    self->user->set_last_command(self->user, "alias");
     display("Alias set\n");
     return;
 }
@@ -203,7 +203,7 @@ int Repl__handle_external_command(Repl *self, char *command) {
         }
     }
     argv[ind] = NULL;
-    User__set_last_command(self->user, argv[0]);
+    self->user->set_last_command(self->user, argv[0]);
     if (redirect == 2) {
         exec_with_pipe(argv, std_out, backgroud, self->user);
     } else {
@@ -214,8 +214,8 @@ int Repl__handle_external_command(Repl *self, char *command) {
 }
 
 void Repl__handle_bello(Repl *self){
-    User__info(self->user);
-    User__set_last_command(self->user, "bello");
+    self->user->info(self->user);
+    self->user->set_last_command(self->user, "bello");
 }
 
 void Repl__main_loop(Repl *self) {

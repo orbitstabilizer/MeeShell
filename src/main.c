@@ -1,6 +1,7 @@
 #include "dictionary.h"
 #include "repl.h"
 #include "user.h"
+#define UNUSED(x) (void)(x)
 
 #define ALIAS_FILE ".meeshrc"
 
@@ -21,16 +22,18 @@ Repl *repl;
 Ctrl-C was pressed
 */
 void sigint_handler(int _) {
+    UNUSED(_);
     printf("\n");
     repl->print_prompt(repl);
 }
 
 void sigchld_handler(int _) { // walking dead!
+    UNUSED(_);
     int status;
     for (int i = 0; i < user->bg_pids_count; i++) {
         pid_t pid = waitpid(user->bg_pids[i], &status, WNOHANG);
         if (pid > 0) {
-            User__remove_bg_process(user, pid);
+            user->remove_bg_process(user, pid);
         }
     }
 }
@@ -54,7 +57,7 @@ void teardown() {
     Dict__dump(aliases, ALIAS_FILE);
     // free aliases
     Dict__free(aliases);
-    User__free_user(user);
+    user->free(user);
     repl->free(repl);
 }
 

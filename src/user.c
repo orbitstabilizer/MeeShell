@@ -25,7 +25,17 @@ User *User__new_user() {
 
     memset(user->last_command, 0, sizeof(user->last_command));
     user->bg_pids_count = 0;
+
+    user->free = User__free_user;
+    user->update = User__update;
+    user->info = User__info;
+    user->set_last_command = User__set_last_command;
+    user->add_bg_process = User__add_bg_process;
+    user->remove_bg_process = User__remove_bg_process;
+
+
     return user;
+
 }
 
 void User__free_user(User *self) {

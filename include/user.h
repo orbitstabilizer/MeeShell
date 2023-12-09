@@ -25,6 +25,18 @@ typedef struct User {
     char last_command[BUFFER_SIZE];
     pid_t bg_pids[MAX_BG_PIDS];
     int bg_pids_count;
+
+    // methods
+    void (*free)(struct User *self);
+    void (*update)(struct User *self);
+    void (*info)(struct User *self);
+    void (*set_last_command)(struct User *self, char *command);
+    void (*add_bg_process)(struct User *self, pid_t pid);
+    void (*remove_bg_process)(struct User *self, pid_t pid);
+
+
+
+
 } User;
 
 User *User__new_user();
@@ -34,6 +46,5 @@ void User__info(User *self);
 void User__set_last_command(User *self, char *command);
 void User__add_bg_process(User *self, pid_t pid);
 void User__remove_bg_process(User *self, pid_t pid);
-void User__print_bg_processes(User *self);
 
 #endif

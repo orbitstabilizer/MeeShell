@@ -98,7 +98,7 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
             if (!background)
                 wait(NULL);
             else {
-                User__add_bg_process(user, pid);
+                user->add_bg_process(user, pid);
                 msleep(100);
                 // printf("\nProcess %d running in background\n", pid);
             }
@@ -127,7 +127,7 @@ int exec_with_pipe(char **argv, char *file, int bg, User *user) {
         pid = fork();
     }
     if (pid > 0) {
-        User__add_bg_process(user, pid);
+        user->add_bg_process(user, pid);
         goto end;
     }
     int fd[2];
