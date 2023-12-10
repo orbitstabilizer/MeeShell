@@ -121,9 +121,7 @@ int Repl__handle_external_command(Repl *self, char *command) {
     size_t argc = 1;
     int bg = 0;
     int redirect = -1;
-    char *std_in = NULL;
     char *std_out = NULL;
-    char *std_err = NULL;
     int mode = 0;
     for (size_t i = 1; i < tkn_cnt; i++) {
         switch (tokenizer->list[i].type) {
@@ -196,7 +194,7 @@ int Repl__handle_external_command(Repl *self, char *command) {
     if (redirect == 2) {
         exec_with_pipe(argv, std_out, bg, self->user);
     } else {
-        exec_command(argv, bg, std_in, std_out, std_err, mode, self->user);
+        exec_command(argv, bg, std_out, mode, self->user);
     }
     return 0;
 }
@@ -209,13 +207,6 @@ void Repl__handle_bello(Repl *self, size_t argc,bool bg,
     }
     FILE *out = stdout;
     pid_t pid = -1;
-    if(bg){
-        pid = fork();
-    }
-    if (bg && pid > 0) {
-        self->user->add_bg_process(self->user, pid);
-        goto end;
-    }
     bool reverse = false;
     if (std_out != NULL){
         if (mode == 2){
@@ -230,14 +221,23 @@ void Repl__handle_bello(Repl *self, size_t argc,bool bg,
             goto end;
         }
     }
+    if(bg){
+        pid = fork();
+    }
+    if (bg && pid > 0) {
+        self->user->add_bg_process(self->user, pid);
+        goto end;
+    }
     self->user->info(self->user, out, reverse);
+    msleep(100); // to not mess up the output with the prompt
+    
     if (std_out != NULL){
         fclose(out);
     }
+end:
     if (bg && pid == 0) {
         exit(0);
     }
-end:
     self->user->set_last_command(self->user, "bello");
 }
 
