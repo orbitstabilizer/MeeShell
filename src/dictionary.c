@@ -70,6 +70,8 @@ void Dict__free(Dict *dict) {
         while (bin != NULL) {
             next = bin->next;
             free(bin->key);
+            if (bin->value != NULL)
+                free(bin->value);
             free(bin);
             bin = next;
         }
