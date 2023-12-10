@@ -1,4 +1,5 @@
 #include "repl.h"
+#include "tokenizer.h"
 #include "utils.h"
 
 void display(const char *format, ...) {
@@ -8,14 +9,10 @@ void display(const char *format, ...) {
     va_end(args);
 }
 
-char *next_literal(Tokenizer *tokenizer, size_t *ind) {
-    size_t err;
-    char *literal = tokenizer->next_literal(tokenizer, ind, &err);
-    if (err == 1) {
-        // display("next_literal: Quoted string not terminated\n");
-        display("Syntax error: Quoted string not terminated\n");
-    } else if (err == 2) {
-        display("ERROR: Invalid input sequence\n");
+char *next_literal(Tokenizer *tokenizer, size_t ind) {
+    char *literal = tokenizer->next_literal(tokenizer, ind);
+    if (literal == NULL) {
+        display("Error: expected literal\n");
     }
     return literal;
 }
@@ -65,14 +62,13 @@ void Repl__print_prompt(Repl *self) {
         strncpy(path, cwd, strlen(cwd));
         path[strlen(cwd)] = '\0';
     }
-    printf("%s@%s %s --- ", user->username, user->hostname, path);
+    display("%s@%s %s --- ", user->username, user->hostname, path);
     fflush(stdout);
 }
 
 void Repl__handle_cd(Repl *self) {
     // cd command must have exactly 1 argument
-    size_t token_ind = 1;
-    char *path = next_literal(self->tokenizer, &token_ind);
+    char *path = next_literal(self->tokenizer, 1);
     if (path == NULL) {
         return;
     }
@@ -90,29 +86,21 @@ void Repl__handle_alias(Repl *self) {
         display("Invalid input sequence\n");
         return;
     }
-    char key[token_list[1].length + 1];
-    self->tokenizer->get_token(self->tokenizer, 1, key);
-
-    size_t ind = 3;
-    if (token_list[ind].type == TOKEN_QUOTE) {
-        ind++;
-        if (token_list[ind].type == TOKEN_QUOTE) { // empty string
-            display("Alias unset\n");
-            Dict__del(self->aliases, key);
-            return;
-        }
-        if (token_list[ind + 1].type != TOKEN_QUOTE) {
-            display("Quoted string not terminated\n");
-            return;
-        }
+    char *key = next_literal(self->tokenizer, 1);   
+    if (strlen(key) == 0) {
+        display("Alias key cannot be empty\n");
+        return;
     }
-    if (token_list[ind].type != TOKEN_LITERAL) {
+    if (token_list[3].type != TOKEN_LITERAL) {
         display("Invalid input sequence\n");
         return;
     }
-    char value[token_list[ind].length + 1];
-    self->tokenizer->get_token(self->tokenizer, ind, value);
-
+    char *value = next_literal(self->tokenizer, 3);
+    if (strlen(value) == 0) {
+        Dict__del(self->aliases, key);
+        display("Alias unset\n");
+        return;
+    }
     Dict__set(self->aliases, key, value);
     self->user->set_last_command(self->user, "alias");
     display("Alias set\n");
@@ -126,7 +114,6 @@ int Repl__handle_external_command(Repl *self, char *command) {
     char *argv[token_count + 1]; // +1 for NULL terminator
     argv[0] = command;
     size_t ind = 1;
-    int quote = 0;
     int backgroud = 0;
     int redirect = -1;
     char *std_in = NULL;
@@ -142,19 +129,11 @@ int Repl__handle_external_command(Repl *self, char *command) {
                 return 1;
             }
             break;
-        case TOKEN_QUOTE:
-            quote = !quote;
-            if (redirect != -1) {
-                display("Error: faulty redirection\n");
-                return 2;
-            }
-            break;
         case TOKEN_LITERAL:
-            tokenizer->list[i].start[tokenizer->list[i].length] = '\0';
-            argv[ind] = tokenizer->list[i].start;
+            argv[ind] = next_literal(tokenizer, i);
             ind++;
             break;
-        case TOKEN_ANGLE_BRACKET1:
+        case TOKEN_REDIRECT:
             if (redirect != -1) {
                 display("Error: multiple redirection\n");
                 return 3;
@@ -162,14 +141,14 @@ int Repl__handle_external_command(Repl *self, char *command) {
                 redirect = 1;
                 mode = 0;
                 i++;
-                char *filename = next_literal(tokenizer, &i);
+                char *filename = next_literal(tokenizer, i);
                 if (filename == NULL) {
                     return 4;
                 }
                 std_out = filename;
             }
             break;
-        case TOKEN_ANGLE_BRACKET2:
+        case TOKEN_APPEND:
             if (redirect != -1) {
                 display("Error: multiple redirection\n");
                 return 5;
@@ -177,21 +156,21 @@ int Repl__handle_external_command(Repl *self, char *command) {
                 redirect = 1;
                 mode = 1;
                 i++;
-                char *filename = next_literal(tokenizer, &i);
+                char *filename = next_literal(tokenizer, i);
                 if (filename == NULL) {
                     return 6;
                 }
                 std_out = filename;
             }
             break;
-        case TOKEN_ANGLE_BRACKET3:
+        case TOKEN_RAPPEND:
             if (redirect != -1) {
                 display("Error: multiple redirection\n");
                 return 7;
             } else {
                 redirect = 2;
                 i++;
-                char *filename = next_literal(tokenizer, &i);
+                char *filename = next_literal(tokenizer, i);
                 if (filename == NULL) {
                     return 8;
                 }
@@ -235,6 +214,11 @@ void Repl__main_loop(Repl *self) {
             tokenizer = NULL;
         }
         tokenizer = Tokenizer__new(self->buffer, BUFFER_SIZE);
+        if (tokenizer->err != 0) {
+            display(Tokenizer__error_msg[tokenizer->err]);
+            continue;
+        }
+
         self->tokenizer = tokenizer;
         token_list = tokenizer->list;
 
@@ -247,9 +231,7 @@ void Repl__main_loop(Repl *self) {
             display("Error: invalid input sequence\n");
             continue;
         }
-        char command[token_list[0].length + 1];
-        tokenizer->get_token(tokenizer, 0, command);
-
+        char *command = next_literal(tokenizer, 0);
         //  first check if it is an alias
         is_alias = self->check_alias(self, is_alias, command);
         if (is_alias) {

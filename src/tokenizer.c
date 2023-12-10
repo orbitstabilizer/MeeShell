@@ -1,5 +1,10 @@
 #include "tokenizer.h"
 static void init_token(Token *token, TokenType type, size_t len, char *start);
+ 
+const char* Tokenizer__error_msg[] = {
+    "No error",
+    "Quoted string not terminated\n",
+};
 
 Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     Tokenizer *self = (Tokenizer *)malloc(sizeof(Tokenizer));
@@ -7,13 +12,13 @@ Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     self->cur_pos = 0;
     self->input_len = input_len;
     self->cur_token = 0;
-    self->quote = 0;
     self->escape = 0;
+    self->err = 0;
 
     self->next = Tokenizer__next;
     self->free = Tokenizer__free;
     self->consume = Tokenizer__consume;
-    self->get_token = Tokenizer__get_token;
+    // self->get_token = Tokenizer__get_token;
     self->next_literal = Tokenizer_next_literal;
 
     self->consume(self);
@@ -36,47 +41,31 @@ void Tokenizer__next(Tokenizer *self) {
         return;
     }
     char c = self->input[self->cur_pos];
-    if (!self->quote)
-        if (c == ' ' || c == '\t' || c == '\n') {
-            while (c == ' ' || c == '\t' || c == '\n') {
-                self->cur_pos++;
-                c = self->input[self->cur_pos];
-            }
+    if (c == ' ' || c == '\t' || c == '\n') {
+        while (c == ' ' || c == '\t' || c == '\n') {
+            self->cur_pos++;
+            c = self->input[self->cur_pos];
         }
-    if (c == '\0' || c == EOF) {
+    }
+    else if (c == '\0' || c == EOF) {
         init_token(token, TOKEN_EOF, 0, NULL);
         self->cur_token++;
         return;
     }
-    bool MATCHED = true;
-
-    switch (c) {
-    case '"':
-        init_token(token, TOKEN_QUOTE, 1, &self->input[self->cur_pos]);
-        self->quote = !self->quote;
-        break;
-    case '&':
+    else if (c == '&'){
         init_token(token, TOKEN_AMPERSAND, 1, &self->input[self->cur_pos]);
-        break;
-    case '=':
-        init_token(token, TOKEN_EQUAL, 1, &self->input[self->cur_pos]);
-        break;
-    // case '\\':
-    //     self->escape = !self->escape;
-    //     break;
-    default:
-        MATCHED = false;
-    }
-#undef MATCH
-
-    if (MATCHED) {
         self->cur_pos++;
         self->cur_token++;
         return;
     }
-
+    else if (c == '='){
+        init_token(token, TOKEN_EQUAL, 1, &self->input[self->cur_pos]);
+        self->cur_pos++;
+        self->cur_token++;
+        return;
+    }
     // >, >>, >>>
-    if (c == '>') {
+    else if (c == '>') {
         self->cur_pos++;
         c = self->input[self->cur_pos];
         if (c == '>') {
@@ -84,34 +73,39 @@ void Tokenizer__next(Tokenizer *self) {
             c = self->input[self->cur_pos];
             if (c == '>') {
                 self->cur_pos++;
-                init_token(token, TOKEN_ANGLE_BRACKET3, 3,
+                init_token(token, TOKEN_RAPPEND, 3,
                            &self->input[self->cur_pos - 3]);
             } else {
-                init_token(token, TOKEN_ANGLE_BRACKET2, 2,
+                init_token(token, TOKEN_APPEND, 2,
                            &self->input[self->cur_pos - 2]);
             }
         } else {
-            init_token(token, TOKEN_ANGLE_BRACKET1, 1,
+            init_token(token, TOKEN_REDIRECT, 1,
                        &self->input[self->cur_pos - 1]);
         }
         self->cur_token++;
         return;
     }
-
-    // go to next empty space or end of input , if quote is on, go to next quote
-    if (self->quote) {
+    else if (c == '"') {
+        self->cur_pos++;
+        size_t start = self->cur_pos;
         c = self->input[self->cur_pos];
-        size_t len = 0;
         while (c != '"' && c != '\0' && c != EOF) {
-            len++;
             self->cur_pos++;
             c = self->input[self->cur_pos];
         }
-        init_token(token, TOKEN_LITERAL, len,
-                   &self->input[self->cur_pos - len]);
+        if ( c != '"'){// quote not closed
+            self->err = 1;
+            return;
+        }
+        init_token(token, TOKEN_LITERAL, self->cur_pos - start,
+                   &self->input[start]);
         self->cur_token++;
+        self->cur_pos++;
         return;
-    } else {
+    }
+    else{
+        // go to next empty space or end of input , if quote is on, go to next quote
         c = self->input[self->cur_pos];
         size_t len = 0;
         while (c != ' ' && c != '\t' && c != '\n' && c != '\0' && c != EOF &&
@@ -123,7 +117,6 @@ void Tokenizer__next(Tokenizer *self) {
         init_token(token, TOKEN_LITERAL, len,
                    &self->input[self->cur_pos - len]);
         self->cur_token++;
-        return;
     }
     return;
 }
@@ -131,35 +124,18 @@ void Tokenizer__next(Tokenizer *self) {
 void Tokenizer__consume(Tokenizer *self) {
     do {
         Tokenizer__next(self);
-    } while (self->list[self->cur_token - 1].type != TOKEN_EOF);
-}
-
-void Tokenizer__get_token(Tokenizer *self, size_t index, char *buffer) {
-    if (index >= self->cur_token) {
-        buffer[0] = '\0';
-        return;
-    }
-    Token *token = &self->list[index];
-    strncpy(buffer, token->start, token->length);
-    buffer[token->length] = '\0';
-    return;
-}
-
-char *Tokenizer_next_literal(Tokenizer *self, size_t *ind, size_t *err) {
-    // quoted literal
-    if (self->list[*ind].type == TOKEN_QUOTE) {
-        (*ind)++;
-        if (self->list[(*ind) + 1].type != TOKEN_QUOTE) {
-            *err = 1;
-            return NULL;
+        if (self->err != 0){
+            return;
         }
-    }
-    if (self->list[*ind].type != TOKEN_LITERAL) {
-        *err = 2;
+    } while ( self->list[self->cur_token - 1].type != TOKEN_EOF);
+}
+
+char *Tokenizer_next_literal(Tokenizer *self, size_t ind){
+    if (self->list[ind].type != TOKEN_LITERAL) {
         return NULL;
     }
-    self->list[*ind].start[self->list[*ind].length] = '\0';
-    return self->list[*ind].start;
+    self->list[ind].start[self->list[ind].length] = '\0';
+    return self->list[ind].start;
 }
 
 #ifdef DEBUG
@@ -170,12 +146,11 @@ void token_name(TokenType type, char *name) {
         break;
     switch (type) {
         MATCH(TOKEN_LITERAL);
-        MATCH(TOKEN_ANGLE_BRACKET1);
-        MATCH(TOKEN_ANGLE_BRACKET2);
-        MATCH(TOKEN_ANGLE_BRACKET3);
+        MATCH(TOKEN_REDIRECT);
+        MATCH(TOKEN_APPEND);
+        MATCH(TOKEN_RAPPEND);
         MATCH(TOKEN_AMPERSAND);
         MATCH(TOKEN_EOF);
-        MATCH(TOKEN_QUOTE);
         MATCH(TOKEN_EQUAL);
     default:
         strcpy(name, "UNKNOWN");
@@ -205,21 +180,5 @@ void print_tokenizer(Tokenizer *this) {
     printf("}\n");
 }
 
-// int main(){
-//     char *input = "echo \"hello world\" > file.txt >> file2.txt >>>  amu \n";
-//     // char * input = "a >>>b";
-//     printf("input: `%s`\n", input);
-//     size_t input_len = strlen(input);
-//     Tokenizer *tokenizer = tokenizer_new(input, input_len);
-//     char token[100];
-//     do {
-//         tokenizer_next(tokenizer);
-//     } while (tokenizer->list[tokenizer->cur_token -1].type != TOKEN_EOF);
-
-//     print_tokenizer(tokenizer);
-
-//     tokenizer_free(tokenizer);
-
-// }
 
 #endif

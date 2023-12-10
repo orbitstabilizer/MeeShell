@@ -12,13 +12,12 @@
 
 typedef enum {
     TOKEN_LITERAL,
-    TOKEN_ANGLE_BRACKET1,
-    TOKEN_ANGLE_BRACKET2,
-    TOKEN_ANGLE_BRACKET3,
+    TOKEN_REDIRECT,
+    TOKEN_APPEND,
+    TOKEN_RAPPEND,
     TOKEN_AMPERSAND,
     TOKEN_EQUAL,
     TOKEN_EOF,
-    TOKEN_QUOTE,
 } TokenType;
 
 /* Token struct
@@ -40,23 +39,29 @@ typedef struct {
  * token_list: list of tokens
  * cur_token: current token
  */
+
+extern const char* Tokenizer__error_msg[];
+
 typedef struct Tokenizer Tokenizer;
 struct Tokenizer {
     char *input;
     size_t cur_pos;
     size_t input_len;
+    /*
+     * 1 : Quoted string not terminated
+     */
+    int err;
+    
 
     Token list[MAX_TOKEN_LEN];
     size_t special_token;
     size_t cur_token;
-    bool quote;
     bool escape;
     // methods
     void (*next)(Tokenizer *self);
     void (*free)(Tokenizer *self);
     void (*consume)(Tokenizer *self);
-    void (*get_token)(Tokenizer *self, size_t index, char *buffer);
-    char *(*next_literal)(Tokenizer *self, size_t *ind, size_t *err);
+    char *(*next_literal)(Tokenizer *self, size_t ind);
 
 };
 
@@ -64,8 +69,8 @@ Tokenizer *Tokenizer__new(char *input, size_t input_len);
 void Tokenizer__free(Tokenizer *self);
 void Tokenizer__next(Tokenizer *self);
 void Tokenizer__consume(Tokenizer *self);
-void Tokenizer__get_token(Tokenizer *self, size_t index, char *buffer);
-char *Tokenizer_next_literal(Tokenizer *self, size_t *ind, size_t *err);
+char *Tokenizer_next_literal(Tokenizer *self, size_t ind);
+void print_tokenizer(Tokenizer *this);
 
 
 
