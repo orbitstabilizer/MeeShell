@@ -26,7 +26,7 @@
 char *search_command(const char *command);
 int exec_with_pipe(char **argv, char *file, int bg, User *user);
 
-void exec_command(char **argv, int background, char *std_out, int mode,
+int exec_command(char **argv, int background, char *std_out, int mode,
                   User *user);
 
 int msleep(long msec);

@@ -25,12 +25,10 @@ int msleep(long msec) {
 char *search_command(const char *command) {
     char *path = getenv("PATH");
     /*  From man getenv:
-     * The getenv() function obtains the current value of the environment
-     variable, name.  The application should not modify the string pointed to by
+     should not modify the string pointed to by
      the getenv() function.
     */
     char *path_copy = strdup(path); // Duplicate the string pointed to by path
-    //
     char *path_token = strtok(path_copy, ":");
     char *command_path =
         calloc(1, MAX_PATH_LENGTH); // Allocate memory for the command path
@@ -40,15 +38,6 @@ char *search_command(const char *command) {
             break;
         }
         snprintf(command_path, MAX_PATH_LENGTH, "%s/%s", path_token, command);
-
-        /*
-        *   The access() system call checks the accessibility of the file named
-        by the path argument for the access permissions indicated by the mode
-         argument.  The value of mode is either the bitwise-inclusive OR of the
-         access permissions to be checked (R_OK for read permission, W_OK for
-         write permission, and X_OK for execute/search permission), or the
-         existence test (F_OK).
-        */
         if (access(command_path, X_OK) ==
             0) { // Check if the file exists and is executable
             free(path_copy);
@@ -60,30 +49,23 @@ char *search_command(const char *command) {
     return strdup(command);
 }
 
-void exec_command(char **argv, int background, char *std_out, int mode,
-                  User *user) {
+/*
+ * 0: success
+ * 1: fork failed
+ * 2: Command not found
+ */
+int exec_command(char **argv, int background, char *std_out, int mode,
+                 User *user) {
     char *path = search_command(argv[0]);
     if (path != NULL) {
-        // save stdout
-        int stdout_copy = dup(STDOUT_FILENO);
-        // redirect stdout
-        if (std_out != NULL) {
-            if (mode == 0) {
-                freopen(std_out, "w", stdout);
-            } else if (mode == 1) {
-                freopen(std_out, "a", stdout);
-            }
-        }
         pid_t pid = fork();
-        if (pid == 0) { // child process
+        if (pid < 0) {
+            return 1;
+        } else if (pid == 0) { // child process
+            freopen(std_out, mode == 0 ? "w" : "a", stdout);
             execv(path, argv);
-            // if execv returns, it must have failed
-            printf("Command not found\n");
-            exit(1);
+            return 2;
         } else { // parent process
-            // restore stdin, stdout, stderr
-            dup2(stdout_copy, STDOUT_FILENO);
-            close(stdout_copy);
             if (!background)
                 wait(NULL);
             else {
@@ -92,9 +74,26 @@ void exec_command(char **argv, int background, char *std_out, int mode,
             }
         }
         free(path);
-    } else {
-        printf("Command not found in path\n");
+        return 0;
     }
+    return 2;
+}
+
+int write_in_reverse(char *file, char *buffer, size_t count) {
+    FILE *fp = fopen(file, "a");
+    if (fp == NULL) {
+        return 3;
+    }
+    if (count >= 1 && buffer[count - 1] == '\n') {
+        count--;
+    }
+    // print in reverse order
+    for (ssize_t i = count - 1; i >= 0; i--) {
+        fputc(buffer[i], fp);
+    }
+    fputc('\n', fp);
+    fclose(fp);
+    return 0;
 }
 
 /*
@@ -106,73 +105,45 @@ void exec_command(char **argv, int background, char *std_out, int mode,
 int exec_with_pipe(char **argv, char *file, int bg, User *user) {
     char *path = search_command(argv[0]);
     int status = 0;
+    pid_t pid = -1;
     if (path == NULL) {
         status = 1;
-        goto end;
+        free(path);
+        return status;
     }
-    pid_t pid = -1;
     if (bg) {
         pid = fork();
     }
     if (pid > 0) {
         user->add_bg_process(user, pid);
-        goto end;
+        free(path);
+        return 0;
     }
     int fd[2];
     pipe(fd);
     pid = fork();
     if (pid < 0) {
         status = 2;
-        goto end;
-    }
-    if (pid == 0) {
+    } else if (pid == 0) {
         close(fd[0]);
         dup2(fd[1], STDOUT_FILENO);
         execv(path, argv);
     } else {
         close(fd[1]);
-        size_t capacity = 256;
+        char *buffer = NULL;
         size_t size = 0;
-        char *buffer = malloc(capacity);
-        while (1) {
-            ssize_t count = read(fd[0], buffer + size, capacity - size);
-            if (count == 0) {
-                break;
-            }
-            size += count;
-            if (capacity > 1000000) {
-                break;
-            }
-            if (size == capacity) {
-                capacity *= 2;
-                buffer = realloc(buffer, capacity);
-            }
-        }
-
-        FILE *fp = fopen(file, "a");
-        if (fp == NULL) {
-            free(buffer);
+        ssize_t count = getdelim(&buffer, &size, '\0', fdopen(fd[0], "r"));
+        if (count == -1) {
             status = 3;
-            goto end;
         }
-        if (size>=1 && buffer[size - 1] == '\n') {
-            size--;
+        else if (write_in_reverse(file, buffer, count) != 0) {
+            status = 3;
         }
-        for (int i = size - 1; i >= 0; i--) {
-            fputc(buffer[i], fp);
-        }
-        fputc('\n', fp);
-        fclose(fp);
+        if (buffer != NULL)
+            free(buffer);
         close(fd[0]);
-
-        free(buffer);
         wait(NULL);
     }
-    if (bg) {
-        exit(0);
-    }
-
-end:
     free(path);
-    return status;
+    exit(0);
 }

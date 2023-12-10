@@ -3,12 +3,11 @@
 #include "utils.h"
 #include "utils.h"
 
-
-
 void display(const char *format, ...) {
     va_list args;
     va_start(args, format);
-    vprintf(format, args);
+    // vprintf(format, args);
+    vfprintf(stdout, format, args);
     va_end(args);
 }
 
@@ -120,70 +119,39 @@ int Repl__handle_external_command(Repl *self, char *command) {
     argv[0] = command;
     size_t argc = 1;
     int bg = 0;
-    int redirect = -1;
     char *std_out = NULL;
-    int mode = 0;
+    int mode = -1;
+
     for (size_t i = 1; i < tkn_cnt; i++) {
-        switch (tokenizer->list[i].type) {
-        case TOKEN_AMPERSAND:
+        TokenType type = tokenizer->list[i].type;
+        if (type == TOKEN_AMPERSAND){
             bg = 1;
             if (i != tkn_cnt - 2) {
                 display("Error: & must be the last token\n");
                 return 1;
             }
-            break;
-        case TOKEN_LITERAL:
+        }
+        else if (type == TOKEN_LITERAL){
             argv[argc] = next_literal(tokenizer, i);
             argc++;
-            break;
-        case TOKEN_REDIRECT:
-            if (redirect != -1) {
+        }
+        else if (type == TOKEN_REDIRECT || type == TOKEN_APPEND || type == TOKEN_RAPPEND){
+            if (mode != -1) {
                 display("Error: multiple redirection\n");
                 return 3;
-            } else {
-                redirect = 1;
-                mode = 0;
-                i++;
-                char *filename = next_literal(tokenizer, i);
-                if (filename == NULL) {
-                    return 4;
-                }
-                std_out = filename;
             }
-            break;
-        case TOKEN_APPEND:
-            if (redirect != -1) {
-                display("Error: multiple redirection\n");
-                return 5;
-            } else {
-                redirect = 1;
+            mode = 0;
+            if (type == TOKEN_APPEND)
                 mode = 1;
-                i++;
-                char *filename = next_literal(tokenizer, i);
-                if (filename == NULL) {
-                    return 6;
-                }
-                std_out = filename;
-            }
-            break;
-        case TOKEN_RAPPEND:
-            if (redirect != -1) {
-                display("Error: multiple redirection\n");
-                return 7;
-            } else {
-                redirect = 2;
+            else if (type == TOKEN_RAPPEND)
                 mode = 2;
-                i++;
-                char *filename = next_literal(tokenizer, i);
-                if (filename == NULL) {
-                    return 8;
-                }
-                std_out = filename;
-            }
-            break;
-        default:
-            break;
+            i++;
+            std_out = next_literal(tokenizer, i);
         }
+    }
+    if (mode != -1 && std_out == NULL) {
+        display("Error: redirection without file\n");
+        return 2;
     }
     argv[argc] = NULL;
     self->user->set_last_command(self->user, argv[0]);
@@ -191,10 +159,14 @@ int Repl__handle_external_command(Repl *self, char *command) {
         self->handle_bello(self, argc,bg, std_out, mode);
         return 0;
     }
-    if (redirect == 2) {
+    if (mode == 2) {
         exec_with_pipe(argv, std_out, bg, self->user);
+        printf("done\n");
     } else {
-        exec_command(argv, bg, std_out, mode, self->user);
+        int err = exec_command(argv, bg, std_out, mode, self->user);
+        if (err == 2) {
+            display("%s: command not found\n", argv[0]);
+        }    
     }
     return 0;
 }
@@ -212,9 +184,6 @@ void Repl__handle_bello(Repl *self, size_t argc,bool bg,
         if (mode == 2){
             reverse = true;
         }
-        // redirect stdout to file
-        // mode = 0 : 'w'
-        // mode = 1 : 'a'
         out = fopen(std_out, mode == 0 ? "w" : "a");
         if (out == NULL) {
             display("bello: cannot open file\n");
