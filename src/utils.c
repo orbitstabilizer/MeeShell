@@ -32,7 +32,8 @@ char *search_command(const char *command) {
     char *path_copy = strdup(path); // Duplicate the string pointed to by path
     //
     char *path_token = strtok(path_copy, ":");
-    char *command_path = calloc(1, MAX_PATH_LENGTH); // Allocate memory for the command path
+    char *command_path =
+        calloc(1, MAX_PATH_LENGTH); // Allocate memory for the command path
     while (path_token != NULL) {
         path_token = strtok(NULL, ":");
         if (path_token == NULL) {
@@ -48,7 +49,8 @@ char *search_command(const char *command) {
          write permission, and X_OK for execute/search permission), or the
          existence test (F_OK).
         */
-        if (access(command_path, X_OK) == 0) { // Check if the file exists and is executable
+        if (access(command_path, X_OK) ==
+            0) { // Check if the file exists and is executable
             free(path_copy);
             return command_path;
         }
@@ -58,27 +60,19 @@ char *search_command(const char *command) {
     return strdup(command);
 }
 
-void exec_command(char **argv, int background, char *std_in, char *std_out,
-                  char *std_err, int mode, User *user) {
+void exec_command(char **argv, int background, char *std_out, int mode,
+                  User *user) {
     char *path = search_command(argv[0]);
     if (path != NULL) {
-        // save stdin, stdout, stderr
-        int stdin_copy = dup(STDIN_FILENO);
+        // save stdout
         int stdout_copy = dup(STDOUT_FILENO);
-        int stderr_copy = dup(STDERR_FILENO);
-        // redirect stdin, stdout, stderr
-        if (std_in != NULL) {
-            freopen(std_in, "r", stdin);
-        }
+        // redirect stdout
         if (std_out != NULL) {
             if (mode == 0) {
                 freopen(std_out, "w", stdout);
             } else if (mode == 1) {
                 freopen(std_out, "a", stdout);
             }
-        }
-        if (std_err != NULL) {
-            freopen(std_err, "w", stderr);
         }
         pid_t pid = fork();
         if (pid == 0) { // child process
@@ -88,19 +82,13 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
             exit(1);
         } else { // parent process
             // restore stdin, stdout, stderr
-            dup2(stdin_copy, STDIN_FILENO);
             dup2(stdout_copy, STDOUT_FILENO);
-            dup2(stderr_copy, STDERR_FILENO);
-            close(stdin_copy);
             close(stdout_copy);
-            close(stderr_copy);
-
             if (!background)
                 wait(NULL);
             else {
                 user->add_bg_process(user, pid);
                 msleep(100);
-                // printf("\nProcess %d running in background\n", pid);
             }
         }
         free(path);
@@ -159,7 +147,6 @@ int exec_with_pipe(char **argv, char *file, int bg, User *user) {
                 capacity *= 2;
                 buffer = realloc(buffer, capacity);
             }
-
         }
 
         FILE *fp = fopen(file, "a");
@@ -168,7 +155,7 @@ int exec_with_pipe(char **argv, char *file, int bg, User *user) {
             status = 3;
             goto end;
         }
-        if (buffer[size - 1] == '\n') {
+        if (size>=1 && buffer[size - 1] == '\n') {
             size--;
         }
         for (int i = size - 1; i >= 0; i--) {
@@ -189,5 +176,3 @@ end:
     free(path);
     return status;
 }
-
-
