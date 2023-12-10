@@ -1,5 +1,5 @@
 #include "user.h"
-void get_parent_shell(char *resultBuffer, size_t bufferSize);
+char * get_parent_shell();
 
 User *User__new_user() {
     User *user = malloc(sizeof(User));
@@ -14,12 +14,7 @@ User *User__new_user() {
     user->cwd = strdup(tmp);
     user->home = strdup(pws->pw_dir);
 
-    char buf[BUFFER_SIZE];
-    get_parent_shell(buf, BUFFER_SIZE);
-    // remove newline
-    buf[strlen(buf) - 1] = '\0';
-    user->shell = strdup(buf);
-
+    user->shell = get_parent_shell();
     // user->shell = strdup(getenv("SHELL"));
     // find parent process name
     // user->shell = name;
@@ -95,62 +90,63 @@ void User__info(User *self, FILE *stream, bool reverse) {
                        "Number of Processes          : %d\n"
                        "Terminal Name(TTY)           : %s\n";
 
+    char* buffer = NULL;
+    size_t buffer_size = 0;
+    FILE* ss = open_memstream(&buffer, &buffer_size);
+    fprintf(ss, text, self->username, self->hostname, self->shell,
+            self->home, date_time, self->last_command, num_procs, tty);
+    fclose(ss);    //This will set buffer and bufferSize.
     if (!reverse) {
-        fprintf(stream, text, self->username, self->hostname, self->shell,
-                self->home, date_time, self->last_command, num_procs, tty);
+        fprintf(stream, "%s", buffer);
+        free(buffer);
     } else {
         // reverse the content
-        char buf[BUFFER_SIZE];
-        snprintf(buf, BUFFER_SIZE, text, self->username, self->hostname,
-                 self->shell, self->home, date_time, self->last_command,
-                 num_procs, tty);
-        int len = strlen(buf);
-        for (int i = len - 1; i >= 0; i--) {
-            if (i == len - 1 && buf[i] == '\n')
+        for (int i = buffer_size - 1; i >= 0; i--) {
+            if (i == (int)buffer_size - 1 && buffer[i] == '\n')
                 continue;
-            fputc(buf[i], stream);
+            fputc(buffer[i], stream);
         }
         fputc('\n', stream);
     }
 }
 
-void get_parent_shell(char *resultBuffer, size_t bufferSize) {
+char *get_parent_shell(){
     pid_t parent_pid = getppid();
-    char parent_pid_str[MAX_SH_NAME];
-    char cmd[MAX_SH_NAME];
-
-    snprintf(parent_pid_str, MAX_SH_NAME, "%d", (int)parent_pid);
-    snprintf(cmd, MAX_SH_NAME, "ps -p %s -o comm=", parent_pid_str);
+    char parent_pid_str[MAX_PID_LENGTH];
+    snprintf(parent_pid_str, MAX_PID_LENGTH, "%d", (int)parent_pid);
 
     int pipe_fd[2];
     if (pipe(pipe_fd) == -1) {
-        return;
+        return NULL;
     }
-
     pid_t child_pid = fork();
 
-    if (child_pid == -1) {
+    if (child_pid < 0) {
         close(pipe_fd[0]);
         close(pipe_fd[1]);
-        return;
     }
-
-    if (child_pid == 0) {
+    else if (child_pid == 0) {
         close(pipe_fd[0]);
         dup2(pipe_fd[1], STDOUT_FILENO);
         close(pipe_fd[1]);
-
         // execute the ps command in the child process
         execlp("ps", "ps", "-p", parent_pid_str, "-o", "comm=", (char *)NULL);
     } else {
         close(pipe_fd[1]);
-
+        char *buffer = NULL;
+        size_t buffer_size = 0;
         // Read the output of the ps command from the pipe
-        ssize_t bytesRead = read(pipe_fd[0], resultBuffer, bufferSize - 1);
-        if (bytesRead > 0) {
-            resultBuffer[bytesRead] = '\0';
-        }
+        // ssize_t len = read(pipe_fd[0], buffer, buffer_size - 1);
+        ssize_t len = getline(&buffer, &buffer_size, fdopen(pipe_fd[0], "r"));
         close(pipe_fd[0]);
         wait(NULL);
+        if (len > 0) {
+            // remove the trailing newline character
+            buffer[len - 1] = '\0';
+            return buffer;
+        }
+        return buffer;
     }
+    return NULL;
+
 }

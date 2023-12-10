@@ -13,9 +13,9 @@
 #include <time.h>
 
 
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 1024
 #define MAX_BG_PIDS 1024
-#define MAX_SH_NAME 256
+#define MAX_PID_LENGTH 15
 
 typedef struct User {
     uid_t uid;
