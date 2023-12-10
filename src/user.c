@@ -13,15 +13,16 @@ User *User__new_user() {
     getcwd(tmp, BUFFER_SIZE);
     user->cwd = strdup(tmp);
     user->home = strdup(pws->pw_dir);
+
     char buf[BUFFER_SIZE];
     get_parent_shell(buf, BUFFER_SIZE);
     // remove newline
     buf[strlen(buf) - 1] = '\0';
     user->shell = strdup(buf);
+
     // user->shell = strdup(getenv("SHELL"));
     // find parent process name
     // user->shell = name;
-
 
     memset(user->last_command, 0, sizeof(user->last_command));
     user->bg_pids_count = 0;
@@ -33,9 +34,7 @@ User *User__new_user() {
     user->add_bg_process = User__add_bg_process;
     user->remove_bg_process = User__remove_bg_process;
 
-
     return user;
-
 }
 
 void User__free_user(User *self) {
@@ -60,12 +59,11 @@ void User__set_last_command(User *self, char *command) {
     self->last_command[len] = '\0';
 }
 
-
-void User__add_bg_process(User *self, pid_t pid){
+void User__add_bg_process(User *self, pid_t pid) {
     self->bg_pids[self->bg_pids_count++] = pid;
 }
 
-void User__remove_bg_process(User *self, pid_t pid){
+void User__remove_bg_process(User *self, pid_t pid) {
     for (int i = 0; i < self->bg_pids_count; i++) {
         if (self->bg_pids[i] == pid) {
             for (int j = i; j < self->bg_pids_count - 1; j++) {
@@ -78,8 +76,7 @@ void User__remove_bg_process(User *self, pid_t pid){
     }
 }
 
-
-void User__info(User *self) {
+void User__info(User *self, FILE *stream, bool reverse) {
 
     time_t t;
     struct tm *tm_info;
@@ -87,17 +84,34 @@ void User__info(User *self) {
     tm_info = localtime(&t);
     char date_time[26];
     strftime(date_time, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-    int num_procs = 1 + self->bg_pids_count;//+1 for the shell itself
+    int num_procs = 1 + self->bg_pids_count; //+1 for the shell itself
     char *tty = ttyname(STDIN_FILENO);
+    const char *text = "Username                     : %s\n"
+                       "Hostname                     : %s\n"
+                       "Current Shell                : %s\n"
+                       "Home Location                : %s\n"
+                       "Current Date and time        : %s\n"
+                       "Last Executed Command        : %s\n"
+                       "Number of Processes          : %d\n"
+                       "Terminal Name(TTY)           : %s\n";
 
-    printf("Username                     : %s\n", self->username);
-    printf("Hostname                     : %s\n", self->hostname);
-    printf("Current Shell                : %s\n", self->shell);
-    printf("Home Location                : %s\n", self->home);
-    printf("Current Date and time        : %s\n", date_time);
-    printf("Last Executed Command        : %s\n", self->last_command);
-    printf("Number of Processes          : %d\n", num_procs);
-    printf("Terminal Name(TTY)           : %s\n", tty);
+    if (!reverse) {
+        fprintf(stream, text, self->username, self->hostname, self->shell,
+                self->home, date_time, self->last_command, num_procs, tty);
+    } else {
+        // reverse the content
+        char buf[BUFFER_SIZE];
+        snprintf(buf, BUFFER_SIZE, text, self->username, self->hostname,
+                 self->shell, self->home, date_time, self->last_command,
+                 num_procs, tty);
+        int len = strlen(buf);
+        for (int i = len - 1; i >= 0; i--) {
+            if (i == len - 1 && buf[i] == '\n')
+                continue;
+            fputc(buf[i], stream);
+        }
+        fputc('\n', stream);
+    }
 }
 
 void get_parent_shell(char *resultBuffer, size_t bufferSize) {
@@ -121,15 +135,15 @@ void get_parent_shell(char *resultBuffer, size_t bufferSize) {
         return;
     }
 
-    if (child_pid == 0) { 
-        close(pipe_fd[0]); 
+    if (child_pid == 0) {
+        close(pipe_fd[0]);
         dup2(pipe_fd[1], STDOUT_FILENO);
         close(pipe_fd[1]);
 
         // execute the ps command in the child process
         execlp("ps", "ps", "-p", parent_pid_str, "-o", "comm=", (char *)NULL);
-    } else { 
-        close(pipe_fd[1]); 
+    } else {
+        close(pipe_fd[1]);
 
         // Read the output of the ps command from the pipe
         ssize_t bytesRead = read(pipe_fd[0], resultBuffer, bufferSize - 1);
@@ -137,6 +151,6 @@ void get_parent_shell(char *resultBuffer, size_t bufferSize) {
             resultBuffer[bytesRead] = '\0';
         }
         close(pipe_fd[0]);
-        wait(NULL); 
+        wait(NULL);
     }
 }

@@ -9,32 +9,24 @@ User *user = NULL;
 Dict *aliases;
 Repl *repl;
 
-// TODO: bello redirection
-// TODO: finish bello
-// TODO: recursive alias
-// TODO: clear screen
-        // C-l -> clear screen
-        // if (buffer[0] == 12) {
-        //     printf("\033[H\033[J");
-        //     continue;
-        // }
-/*
-Ctrl-C was pressed
-*/
-void sigint_handler(int _) {
-    UNUSED(_);
-    printf("\n");
-    repl->print_prompt(repl);
-}
+// TODO: recursive alias?
+// TODO: Refactor exec external command functions
 
-void sigchld_handler(int _) { // walking dead!
-    UNUSED(_);
-    int status;
-    for (int i = 0; i < user->bg_pids_count; i++) {
-        pid_t pid = waitpid(user->bg_pids[i], &status, WNOHANG);
-        if (pid > 0) {
-            user->remove_bg_process(user, pid);
+void sig_handler(int sig) { // walking dead!
+    if (sig == SIGINT){
+        printf("\n");
+        repl->print_prompt(repl);
+        return;
+    }
+    if (sig == SIGCHLD){
+        int status;
+        for (int i = 0; i < user->bg_pids_count; i++) {
+            pid_t pid = waitpid(user->bg_pids[i], &status, WNOHANG);
+            if (pid > 0) {
+                user->remove_bg_process(user, pid);
+            }
         }
+        return;
     }
 }
 
@@ -44,8 +36,8 @@ void setup() {
     user = User__new_user();
     Dict__load(aliases, ALIAS_FILE);
     // catch ctrl-c
-    signal(SIGINT, sigint_handler);
-    signal(SIGCHLD, sigchld_handler);
+    signal(SIGINT, sig_handler);
+    signal(SIGCHLD, sig_handler);
 }
 
 void teardown() {

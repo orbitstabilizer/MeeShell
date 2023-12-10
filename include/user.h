@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include <pwd.h>
 #include <sys/types.h>
@@ -11,7 +12,8 @@
 #include <sys/utsname.h>
 #include <time.h>
 
-#define BUFFER_SIZE 1024
+
+#define BUFFER_SIZE 2048
 #define MAX_BG_PIDS 1024
 #define MAX_SH_NAME 256
 
@@ -29,7 +31,7 @@ typedef struct User {
     // methods
     void (*free)(struct User *self);
     void (*update)(struct User *self);
-    void (*info)(struct User *self);
+    void (*info)(struct User *self, FILE *fp, bool reverse);
     void (*set_last_command)(struct User *self, char *command);
     void (*add_bg_process)(struct User *self, pid_t pid);
     void (*remove_bg_process)(struct User *self, pid_t pid);
@@ -42,7 +44,7 @@ typedef struct User {
 User *User__new_user();
 void User__free_user(User *self);
 void User__update(User *self);
-void User__info(User *self);
+void User__info(User *self, FILE *fp, bool reverse);
 void User__set_last_command(User *self, char *command);
 void User__add_bg_process(User *self, pid_t pid);
 void User__remove_bg_process(User *self, pid_t pid);

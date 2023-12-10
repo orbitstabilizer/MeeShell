@@ -55,7 +55,7 @@ char *search_command(const char *command) {
     }
     free(path_copy);
     free(command_path);
-    return NULL;
+    return strdup(command);
 }
 
 void exec_command(char **argv, int background, char *std_in, char *std_out,
@@ -105,7 +105,7 @@ void exec_command(char **argv, int background, char *std_in, char *std_out,
         }
         free(path);
     } else {
-        printf("Command not found\n");
+        printf("Command not found in path\n");
     }
 }
 

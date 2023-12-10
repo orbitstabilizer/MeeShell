@@ -35,7 +35,7 @@ struct Repl {
     void (*handle_alias)(struct Repl *self);
     int (*handle_external_command)(struct Repl *self, char *command);
     bool (*check_alias)(struct Repl *self, bool is_alias, char *command);
-    void (*handle_bello)(struct Repl *self);
+    void (*handle_bello)(struct Repl *self, size_t argc, bool bg, char*std_out, int mode);
 };
 
 Repl *Repl__new(User *user, Dict *aliases);
@@ -47,6 +47,6 @@ void Repl__handle_cd(Repl *self);
 void Repl__handle_alias(Repl *self);
 int Repl__handle_external_command(Repl *self, char *command);
 bool Repl__check_alias(Repl *self, bool is_alias, char *command);
-void Repl__handle_bello(Repl *self);
+void Repl__handle_bello(Repl *self, size_t argc,  bool bg, char*std_outm, int mode);
 
 #endif

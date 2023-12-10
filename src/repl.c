@@ -1,6 +1,9 @@
 #include "repl.h"
 #include "tokenizer.h"
 #include "utils.h"
+#include "utils.h"
+
+
 
 void display(const char *format, ...) {
     va_list args;
@@ -41,7 +44,8 @@ void Repl__free(Repl *self) {
     if (self->tokenizer != NULL) {
         self->tokenizer->free(self->tokenizer);
     }
-    free(self); }
+    free(self);
+}
 
 bool Repl__read_prompt(Repl *self) {
     memset(self->buffer, 0, BUFFER_SIZE);
@@ -83,16 +87,16 @@ void Repl__handle_alias(Repl *self) {
     Token *token_list = self->tokenizer->list;
     if (token_list[1].type != TOKEN_LITERAL ||
         token_list[2].type != TOKEN_EQUAL) {
-        display("Invalid input sequence\n");
+        display("Error: alias must be in the form of `alias key=value`\n");
         return;
     }
-    char *key = next_literal(self->tokenizer, 1);   
+    char *key = next_literal(self->tokenizer, 1);
     if (strlen(key) == 0) {
-        display("Alias key cannot be empty\n");
+        display("Error: alias key cannot be empty\n");
         return;
     }
     if (token_list[3].type != TOKEN_LITERAL) {
-        display("Invalid input sequence\n");
+        display("Error: expected literal\n");
         return;
     }
     char *value = next_literal(self->tokenizer, 3);
@@ -110,28 +114,29 @@ void Repl__handle_alias(Repl *self) {
 int Repl__handle_external_command(Repl *self, char *command) {
     Tokenizer *tokenizer = self->tokenizer;
     // first argument should be the current command
-    size_t token_count = tokenizer->cur_token;
-    char *argv[token_count + 1]; // +1 for NULL terminator
+    size_t tkn_cnt = tokenizer->cur_token;
+    char *argv[tkn_cnt + 1]; // +1 for NULL terminator
+
     argv[0] = command;
-    size_t ind = 1;
-    int backgroud = 0;
+    size_t argc = 1;
+    int bg = 0;
     int redirect = -1;
     char *std_in = NULL;
     char *std_out = NULL;
     char *std_err = NULL;
     int mode = 0;
-    for (size_t i = 1; i < token_count; i++) {
+    for (size_t i = 1; i < tkn_cnt; i++) {
         switch (tokenizer->list[i].type) {
         case TOKEN_AMPERSAND:
-            backgroud = 1;
-            if (i != token_count - 2) {
+            bg = 1;
+            if (i != tkn_cnt - 2) {
                 display("Error: & must be the last token\n");
                 return 1;
             }
             break;
         case TOKEN_LITERAL:
-            argv[ind] = next_literal(tokenizer, i);
-            ind++;
+            argv[argc] = next_literal(tokenizer, i);
+            argc++;
             break;
         case TOKEN_REDIRECT:
             if (redirect != -1) {
@@ -169,6 +174,7 @@ int Repl__handle_external_command(Repl *self, char *command) {
                 return 7;
             } else {
                 redirect = 2;
+                mode = 2;
                 i++;
                 char *filename = next_literal(tokenizer, i);
                 if (filename == NULL) {
@@ -181,19 +187,57 @@ int Repl__handle_external_command(Repl *self, char *command) {
             break;
         }
     }
-    argv[ind] = NULL;
+    argv[argc] = NULL;
     self->user->set_last_command(self->user, argv[0]);
+    if (strcmp(command, "bello") == 0) {
+        self->handle_bello(self, argc,bg, std_out, mode);
+        return 0;
+    }
     if (redirect == 2) {
-        exec_with_pipe(argv, std_out, backgroud, self->user);
+        exec_with_pipe(argv, std_out, bg, self->user);
     } else {
-        exec_command(argv, backgroud, std_in, std_out, std_err, mode,
-                     self->user);
+        exec_command(argv, bg, std_in, std_out, std_err, mode, self->user);
     }
     return 0;
 }
 
-void Repl__handle_bello(Repl *self){
-    self->user->info(self->user);
+void Repl__handle_bello(Repl *self, size_t argc,bool bg,
+                        char *std_out, int mode) {
+    if (argc != 1) {
+        display("bello: too many arguments\n");
+        return;
+    }
+    FILE *out = stdout;
+    pid_t pid = -1;
+    if(bg){
+        pid = fork();
+    }
+    if (bg && pid > 0) {
+        self->user->add_bg_process(self->user, pid);
+        goto end;
+    }
+    bool reverse = false;
+    if (std_out != NULL){
+        if (mode == 2){
+            reverse = true;
+        }
+        // redirect stdout to file
+        // mode = 0 : 'w'
+        // mode = 1 : 'a'
+        out = fopen(std_out, mode == 0 ? "w" : "a");
+        if (out == NULL) {
+            display("bello: cannot open file\n");
+            goto end;
+        }
+    }
+    self->user->info(self->user, out, reverse);
+    if (std_out != NULL){
+        fclose(out);
+    }
+    if (bg && pid == 0) {
+        exit(0);
+    }
+end:
     self->user->set_last_command(self->user, "bello");
 }
 
@@ -249,10 +293,7 @@ void Repl__main_loop(Repl *self) {
             self->handle_alias(self);
             continue;
         }
-        if (strcmp(command, "bello") == 0) {
-            self->handle_bello(self);
-            continue;
-        }
+
         self->handle_external_command(self, command);
     }
 }
