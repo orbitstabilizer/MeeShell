@@ -6,6 +6,7 @@ const char* Tokenizer__error_msg[] = {
     "Quoted string not terminated\n",
 };
 
+
 Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     Tokenizer *self = (Tokenizer *)malloc(sizeof(Tokenizer));
     self->input = input;
@@ -25,13 +26,24 @@ Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     return self;
 }
 
+
 void Tokenizer__free(Tokenizer *self) { free(self); }
 
+/*
+ * Initialize a token object
+ * 
+ * Arguments:
+ * - Token *token: the token object
+ * - TokenType type: the type of the token
+ * - size_t len: the length of the token
+ * - char *start: the start of the token
+ */
 void init_token(Token *token, TokenType type, size_t len, char *start) {
     token->type = type;
     token->length = len;
     token->start = start;
 }
+
 
 void Tokenizer__next(Tokenizer *self) {
     Token *token = &self->list[self->cur_token];
@@ -121,6 +133,7 @@ void Tokenizer__next(Tokenizer *self) {
     return;
 }
 
+
 void Tokenizer__consume(Tokenizer *self) {
     do {
         Tokenizer__next(self);
@@ -138,7 +151,6 @@ char *Tokenizer_next_literal(Tokenizer *self, size_t ind){
     return self->list[ind].start;
 }
 
-#ifdef DEBUG
 void token_name(TokenType type, char *name) {
 #define MATCH(type)                                                            \
     case type:                                                                 \
@@ -180,5 +192,3 @@ void print_tokenizer(Tokenizer *this) {
     printf("}\n");
 }
 
-
-#endif
