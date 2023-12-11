@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <time.h>
 
-/* msleep(): Sleep for the requested number of milliseconds. */
+
 int msleep(long msec) {
     struct timespec ts;
     int res;
@@ -49,11 +49,7 @@ char *search_command(const char *command) {
     return strdup(command);
 }
 
-/*
- * 0: success
- * 1: fork failed
- * 2: Command not found
- */
+
 int exec_command(char **argv, int background, char *std_out, int mode,
                  User *user) {
     char *path = search_command(argv[0]);
@@ -79,6 +75,20 @@ int exec_command(char **argv, int background, char *std_out, int mode,
     return 2;
 }
 
+/*
+ * Utility function to write the given buffer to the given file in reverse order.
+ * Arguments:
+ * - char *file: the file name to write to
+ *   If the file does not exist, it will be created.
+ * - char *buffer: the buffer to read data from
+ * - size_t count: the size of the buffer
+ *   If the buffer ends with a newline character, it will be ignored.
+ * Returns:
+ * - int status: the exit status of the command
+ *   0: success
+ *   3: fopen failed
+ *
+ */
 int write_in_reverse(char *file, char *buffer, size_t count) {
     FILE *fp = fopen(file, "a");
     if (fp == NULL) {
@@ -97,33 +107,25 @@ int write_in_reverse(char *file, char *buffer, size_t count) {
 }
 
 /*
- * 0: success
- * 1: command not found
- * 2: fork failed
- * 3: file open failed
+ * Utility for >>> redirection.
+ * Arguments:
+ * - char *file: the file name to write to
+ * - char **argv:  null-terminated array of strings
+ * - char *path: the path to the command to execute
+ * - int *status: the exit status of the command
+ *   0: success
+ *   2: Fork failed
+ *   3: getdelim failed
+ *   4: write_in_reverse failed
+ *   
  */
-int exec_with_pipe(char **argv, char *file, int bg, User *user) {
-    char *path = search_command(argv[0]);
-    int status = 0;
-    pid_t pid = -1;
-    if (path == NULL) {
-        status = 1;
-        free(path);
-        return status;
-    }
-    if (bg) {
-        pid = fork();
-    }
-    if (pid > 0) {
-        user->add_bg_process(user, pid);
-        free(path);
-        return 0;
-    }
+void handle_rappend(char *file, char **argv, char *path, int *status) {
     int fd[2];
     pipe(fd);
-    pid = fork();
+    pid_t pid = fork();
     if (pid < 0) {
-        status = 2;
+        *status = 2;
+        return;
     } else if (pid == 0) {
         close(fd[0]);
         dup2(fd[1], STDOUT_FILENO);
@@ -134,16 +136,43 @@ int exec_with_pipe(char **argv, char *file, int bg, User *user) {
         size_t size = 0;
         ssize_t count = getdelim(&buffer, &size, '\0', fdopen(fd[0], "r"));
         if (count == -1) {
-            status = 3;
+            *status = 3;
         }
         else if (write_in_reverse(file, buffer, count) != 0) {
-            status = 3;
+            *status = 4;
         }
         if (buffer != NULL)
             free(buffer);
         close(fd[0]);
         wait(NULL);
     }
-    free(path);
-    exit(0);
+    status = 0;
+}
+
+
+
+int exec_with_pipe(char **argv, char *file, int bg, User *user) {
+    char *_path = search_command(argv[0]);
+    if (_path == NULL) {
+        return 1;
+    }
+    size_t len = strlen(_path);
+    char path[len + 1];
+    strncpy(path, _path, len);
+    path[len] = '\0';
+
+    int status = 0;
+    pid_t pid = -1;
+    if (bg) {
+        pid = fork();
+    }
+    if (pid > 0) {
+        user->add_bg_process(user, pid);
+        return 0;
+    }
+    handle_rappend(file, argv, path, &status);
+    if (bg){
+        exit(status);
+    }
+    return status;
 }
