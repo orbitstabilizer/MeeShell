@@ -25,7 +25,7 @@ typedef struct {
 } Dict;
 
 /*
- * Create a new dictionary
+ * Create a new dictionary, which is a hash map implemented with chaining
  */
 Dict *Dict__new();
 
@@ -58,6 +58,7 @@ void Dict__print(Dict *dict);
 
 /*
  * Load a dictionary from a file
+ * 
  * dict: dictionary to load into
  * filename: file to load from
  */
