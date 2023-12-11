@@ -1,11 +1,11 @@
 EXEC=meeshell
-CC=gcc
+CC=gcc-12
 INCLUDE_DIR=include/
 BUILD_DIR=build/
 SRC_DIR=src/
 
 BUILD_FLAGS=--std=gnu11 -I $(INCLUDE_DIR)
-DEBUG_FLAGS=-Wall -Wextra  -Wpedantic -g -DDEBUG -fsanitize=address
+DEBUG_FLAGS=-Wall -Wextra  -Wpedantic -g -DDEBUG #-fsanitize=address
 
 
 SRC=$(filter-out $(SRC_DIR)test.c, $(wildcard $(SRC_DIR)*.c))
