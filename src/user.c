@@ -41,6 +41,12 @@ void User__free_user(User *self) {
     free(self);
 }
 
+/*
+ * Update the current working directory of the user
+ * 
+ * Arguments:
+ * - User *self: the user object
+ */
 void User__update(User *self) {
     char tmp[BUFFER_SIZE];
     getcwd(tmp, BUFFER_SIZE);
@@ -48,15 +54,18 @@ void User__update(User *self) {
     self->cwd = strdup(tmp);
 }
 
+
 void User__set_last_command(User *self, char *command) {
     size_t len = strlen(command);
     strncpy(self->last_command, command, len);
     self->last_command[len] = '\0';
 }
 
+
 void User__add_bg_process(User *self, pid_t pid) {
     self->bg_pids[self->bg_pids_count++] = pid;
 }
+
 
 void User__remove_bg_process(User *self, pid_t pid) {
     for (int i = 0; i < self->bg_pids_count; i++) {
@@ -70,6 +79,7 @@ void User__remove_bg_process(User *self, pid_t pid) {
         }
     }
 }
+
 
 void User__info(User *self, FILE *stream, bool reverse) {
 
@@ -110,6 +120,18 @@ void User__info(User *self, FILE *stream, bool reverse) {
     }
 }
 
+
+/*
+ * Utility for getting the name of the parent shell
+ * note that the function otputs the name of parent process,
+ * so, if the parent process is a shell, 
+ * then the output will be the name of the shell,
+ * otherwise, it will be the name of the parent process.
+ * E.g. if the parent process is login, then the output will be login.
+ * 
+ * Returns:
+ * - char *: the name of the parent shell
+ */
 char *get_parent_shell(){
     pid_t parent_pid = getppid();
     char parent_pid_str[MAX_PID_LENGTH];
