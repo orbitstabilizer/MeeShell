@@ -82,6 +82,22 @@ void Repl__handle_cd(Repl *self) {
     }
 }
 
+char *trim_quote(char *str) {
+    // remove the last quote if it exists
+    size_t len = strlen(str);
+    if (str[0] != '"') {
+        return str;
+    }
+    for (ssize_t i = len - 1; i > 0; i--) {
+        if (str[i] == '"') {
+            str[i] = '\0';
+            break;
+        }
+    }
+    return str+1;
+}
+
+
 void Repl__handle_alias(Repl *self) {
     Token *token_list = self->tokenizer->list;
     if (token_list[1].type != TOKEN_LITERAL ||
@@ -98,7 +114,8 @@ void Repl__handle_alias(Repl *self) {
         display("Error: expected literal\n");
         return;
     }
-    char *value = next_literal(self->tokenizer, 3);
+    char *value = trim_quote(token_list[3].start-1);
+    // char *value = next_literal(self->tokenizer, 3);
     if (strlen(value) == 0) {
         Dict__del(self->aliases, key);
         display("Alias unset\n");
@@ -161,7 +178,6 @@ int Repl__handle_external_command(Repl *self, char *command) {
     }
     if (mode == 2) {
         exec_with_pipe(argv, std_out, bg, self->user);
-        printf("done\n");
     } else {
         int err = exec_command(argv, bg, std_out, mode, self->user);
         if (err == 2) {
