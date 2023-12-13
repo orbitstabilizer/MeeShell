@@ -86,7 +86,7 @@ char *trim_quote(char *str) {
     // remove the last quote if it exists
     size_t len = strlen(str);
     if (str[0] != '"') {
-        return str;
+        return NULL;
     }
     for (ssize_t i = len - 1; i > 0; i--) {
         if (str[i] == '"') {
@@ -115,7 +115,9 @@ void Repl__handle_alias(Repl *self) {
         return;
     }
     char *value = trim_quote(token_list[3].start-1);
-    // char *value = next_literal(self->tokenizer, 3);
+    if (value == NULL) {
+        value = next_literal(self->tokenizer, 3);
+    }
     if (strlen(value) == 0) {
         Dict__del(self->aliases, key);
         display("Alias unset\n");
@@ -171,18 +173,28 @@ int Repl__handle_external_command(Repl *self, char *command) {
         return 2;
     }
     argv[argc] = NULL;
-    self->user->set_last_command(self->user, argv[0]);
     if (strcmp(command, "bello") == 0) {
         self->handle_bello(self, argc,bg, std_out, mode);
+        self->user->set_last_command(self->user, argv[0]);
         return 0;
     }
     if (mode == 2) {
-        exec_with_pipe(argv, std_out, bg, self->user);
+        int err = exec_with_pipe(argv, std_out, bg, self->user);
+        if (err == 0){
+            self->user->set_last_command(self->user, argv[0]);
+        }
     } else {
         int err = exec_command(argv, bg, std_out, mode, self->user);
         if (err == 2) {
             display("%s: command not found\n", argv[0]);
         }    
+        else if (err == 3) {
+            display("%s: command not found\n", argv[0]);
+            exit(1);
+        }
+        else if (err == 0){
+            self->user->set_last_command(self->user, argv[0]);
+        }
     }
     return 0;
 }
@@ -223,7 +235,6 @@ end:
     if (bg && pid == 0) {
         exit(0);
     }
-    self->user->set_last_command(self->user, "bello");
 }
 
 void Repl__main_loop(Repl *self) {
@@ -287,7 +298,7 @@ bool Repl__check_alias(Repl *self, bool is_alias, char *command) {
     if (!is_alias) { // avoid infinite loop
         char *value = Dict__get(self->aliases, command);
         if (value != NULL) {
-            display("`%s` is an alias for `%s`\n", command, value);
+            // display("`%s` is an alias for `%s`\n", command, value);
             // substitute the alias
             char tmp[BUFFER_SIZE];
             strncpy(tmp, self->buffer, BUFFER_SIZE);

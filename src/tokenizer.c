@@ -9,7 +9,7 @@ const char* Tokenizer__error_msg[] = {
 
 Tokenizer *Tokenizer__new(char *input, size_t input_len) {
     Tokenizer *self = (Tokenizer *)malloc(sizeof(Tokenizer));
-    self->input = input;
+    self->input = strdup(input);
     self->cur_pos = 0;
     self->input_len = input_len;
     self->cur_token = 0;
@@ -27,7 +27,10 @@ Tokenizer *Tokenizer__new(char *input, size_t input_len) {
 }
 
 
-void Tokenizer__free(Tokenizer *self) { free(self); }
+void Tokenizer__free(Tokenizer *self) {
+    free(self->input);
+    free(self); 
+}
 
 /*
  * Initialize a token object

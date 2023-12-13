@@ -46,7 +46,11 @@ char *search_command(const char *command) {
     }
     free(path_copy);
     free(command_path);
-    return strdup(command);
+    // search in current directory, and root directory
+    if (access(command, X_OK) == 0) {
+        return strdup(command);
+    }
+    return NULL;
 }
 
 
@@ -60,7 +64,7 @@ int exec_command(char **argv, int background, char *std_out, int mode,
         } else if (pid == 0) { // child process
             freopen(std_out, mode == 0 ? "w" : "a", stdout);
             execv(path, argv);
-            return 2;
+            return 3;
         } else { // parent process
             if (!background)
                 wait(NULL);
