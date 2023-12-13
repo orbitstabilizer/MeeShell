@@ -1,6 +1,8 @@
 #include "utils.h"
 #include <errno.h>
 #include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 
 int msleep(long msec) {
@@ -62,7 +64,10 @@ int exec_command(char **argv, int background, char *std_out, int mode,
         if (pid < 0) {
             return 1;
         } else if (pid == 0) { // child process
-            freopen(std_out, mode == 0 ? "w" : "a", stdout);
+            // freopen(std_out, mode == 0 ? "w" : "a", stdout);
+            int fd = open(std_out, mode == 0 ? O_WRONLY | O_CREAT | O_TRUNC : O_WRONLY | O_CREAT | O_APPEND, 0666);
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
             execv(path, argv);
             return 3;
         } else { // parent process
