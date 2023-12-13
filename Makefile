@@ -1,23 +1,23 @@
-EXEC=meeshell
-CC=gcc-12
+EXEC=myshell
+CC=gcc
 INCLUDE_DIR=include/
 BUILD_DIR=build/
 SRC_DIR=src/
 
 BUILD_FLAGS=--std=gnu11 -I $(INCLUDE_DIR)
-DEBUG_FLAGS=-Wall -Wextra  -Wpedantic -g -DDEBUG #-fsanitize=address
+DEBUG_FLAGS=-Wall -Wextra  -Wpedantic -g -DDEBUG -fsanitize=address
 
 
 SRC=$(filter-out $(SRC_DIR)test.c, $(wildcard $(SRC_DIR)*.c))
 OBJ=$(patsubst $(SRC_DIR)%.c, $(BUILD_DIR)%.o, $(SRC))
 
-all: clean debug
+all: clean $(EXEC)
 
 debug: BUILD_FLAGS += $(DEBUG_FLAGS) 
 	#  Debug mode enabled
 debug: $(EXEC)
 
-meeshell: $(OBJ)
+$(EXEC): $(OBJ)
 	#  Building target
 	$(CC) $(BUILD_FLAGS) $(OBJ) -o $(EXEC) 
 build_dir:
