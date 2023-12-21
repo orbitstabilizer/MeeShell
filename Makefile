@@ -1,4 +1,4 @@
-EXEC=myshell
+EXEC=meeshell
 CC=gcc
 INCLUDE_DIR=include/
 BUILD_DIR=build/
