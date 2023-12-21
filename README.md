@@ -1,10 +1,10 @@
 # MeeShell
-Pronounced as "mishelle", a reference to The Beatles' song [Michelle](https://www.youtube.com/watch?v=WoBLi5eE-wY).
+Pronounced as "michelle", a reference to The Beatles' song [Michelle](https://www.youtube.com/watch?v=WoBLi5eE-wY).
 
 ## Build & Execution
 ```bash
 make # Build
-./myshell # Run
+./meeshell # Run
 ```
 ## Features
 
